@@ -63,6 +63,18 @@ void MarkdownView::align_line(std::vector<Run> &next, std::size_t first, double 
     for (std::size_t index = first; index < next.size(); ++index)
         next[index].bounds.x += offset;
 }
+double MarkdownView::align_baselines(std::vector<Run> &next, std::size_t first, double top) {
+    double shared = 0;
+    for (std::size_t index = first; index < next.size(); ++index)
+        shared = std::max(shared, next[index].baseline - next[index].script_shift);
+    double height = 0;
+    for (std::size_t index = first; index < next.size(); ++index) {
+        Run &run = next[index];
+        run.bounds.y += shared - (run.baseline - run.script_shift);
+        height = std::max(height, run.bounds.y + run.bounds.height - top);
+    }
+    return height;
+}
 bool MarkdownView::RunOrder::operator()(const Run &left, const Run &right) const {
     const bool before = left.bounds.y < right.bounds.y;
     return before;
@@ -317,8 +329,11 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
                     return;
                 ++steps;
                 if (safe[offset] == '\n' || safe[offset] == '\r') {
-                    if (!table)
+                    if (!table) {
                         align_line(next, work.line_first, left, right, x[column], block.alignment);
+                        line_height[column] = std::max(line_height[column],
+                                                       align_baselines(next, work.line_first, row_y[column]));
+                    }
                     work.line_first = next.size();
                     x[column] = left;
                     row_y[column] += line_height[column];
@@ -347,8 +362,11 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
                     metrics.ascent + metrics.descent) + 4);
                 if (block.kind != swiftedit::MarkdownKind::code && x[column] > left &&
                     x[column] + measured.width > right) {
-                    if (!table)
+                    if (!table) {
                         align_line(next, work.line_first, left, right, x[column], block.alignment);
+                        line_height[column] = std::max(line_height[column],
+                                                       align_baselines(next, work.line_first, row_y[column]));
+                    }
                     work.line_first = next.size();
                     x[column] = left;
                     row_y[column] += line_height[column];
@@ -359,6 +377,7 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
                 run.bounds = {x[column], row_y[column], measured.width, height};
                 run.font = font;
                 run.baseline = 2 + metrics.ascent + shift;
+                run.script_shift = shift;
                 run.underline = run.baseline + std::max(1.0, metrics.descent * 0.5);
                 run.strike_y = run.baseline - metrics.ascent * 0.35;
                 run.text = word;
@@ -379,8 +398,11 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
             }
             work.offset = 0;
         }
-        if (!table && block.kind != swiftedit::MarkdownKind::code)
-            align_line(next, work.line_first, start, start + column_width, x[0], block.alignment);
+        if (!table) {
+            if (block.kind != swiftedit::MarkdownKind::code)
+                align_line(next, work.line_first, start, start + column_width, x[0], block.alignment);
+            line_height[0] = std::max(line_height[0], align_baselines(next, work.line_first, row_y[0]));
+        }
         double bottom = y + 20;
         for (std::size_t column = 0; column < columns; ++column)
             bottom = std::max(bottom, row_y[column] + line_height[column]);

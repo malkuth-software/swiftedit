@@ -2,6 +2,7 @@
 #include "query_field.hpp"
 #include "csv_view.hpp"
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -126,6 +127,42 @@ void verify_text_baselines() {
     check(painter.labels.size() == 1 && painter.origins[0].y - 18 >= 2 &&
               painter.origins[0].y + 5 <= 30,
           "Query glyph fits the inner field using renderer ascent and descent");
+}
+void verify_mixed_size_baselines() {
+    ObservingPainter painter{};
+    const std::shared_ptr<notepad::MarkdownView> markdown =
+        gf::make_control<notepad::MarkdownView>(gf::StableId("mixed.markdown"));
+    gf::Window window(markdown, {800, 480});
+    (*markdown).set_source("small [big]{size=+4} [tiny]{size=-2} done x[2]{sup} H[2]{sub}\n\nnext\n");
+    window.perform_layout();
+    paint_markdown(*markdown, painter, {0, 0, 800, 480});
+    std::vector<double> line{};
+    double superscript = 0, subscript = 0, next = 0;
+    std::size_t twos = 0;
+    for (std::size_t index = 0; index < painter.labels.size(); ++index) {
+        const std::string &label = painter.labels[index];
+        const double y = painter.origins[index].y;
+        // The ruler's tick labels sit above the page and include a "2".
+        if (y <= 20)
+            continue;
+        if (label == "small" || label == "big" || label == "tiny" || label == "done" || label == "x" ||
+            label == "H")
+            line.push_back(y);
+        else if (label == "2" && twos == 0) {
+            superscript = y;
+            ++twos;
+        } else if (label == "2") {
+            subscript = y;
+            ++twos;
+        } else if (label == "next")
+            next = y;
+    }
+    check(line.size() == 6 && twos == 2 && next > 0, "Mixed-size fixture paints every word");
+    for (const double y : line)
+        check(std::abs(y - line[0]) < 0.01, "Runs of every size share one baseline");
+    check(superscript < line[0] && subscript > line[0],
+          "Super- and subscripts move from the shared baseline");
+    check(next > line[0] + 20, "The next paragraph starts below the tallest run");
 }
 void verify_duplicate_formulas() {
     const std::shared_ptr<notepad::CsvView> grid =
@@ -598,6 +635,7 @@ int main() {
         verify_markdown_metric_invalidation();
         verify_csv_page_navigation();
         verify_text_baselines();
+        verify_mixed_size_baselines();
         verify_duplicate_formulas();
         verify_cooperative_formulas();
         verify_cached_conversion();
