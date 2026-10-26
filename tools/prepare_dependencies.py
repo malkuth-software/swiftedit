@@ -38,6 +38,22 @@ def source(path: Path, repository: str, revision: str) -> None:
         run(['git', '-C', str(path), 'checkout', '--detach', revision])
 
 
+def sparse_source(path: Path, repository: str, revision: str, directory: str) -> None:
+    """Checks out only one directory of a repository at a pinned revision."""
+    if not path.exists():
+        run(['git', 'clone', '--filter=blob:none', '--no-checkout', '--sparse',
+             'https://github.com/' + repository + '.git', str(path)])
+        run(['git', '-C', str(path), 'sparse-checkout', 'set', directory])
+        run(['git', '-C', str(path), 'checkout', '--detach', revision])
+    actual: str = subprocess.check_output(['git', '-C', str(path), 'rev-parse', 'HEAD'], text=True).strip()
+    dirty: str = subprocess.check_output(['git', '-C', str(path), 'status', '--porcelain', '--untracked-files=no'], text=True)
+    if dirty:
+        raise RuntimeError('Dependency checkout is not the clean pinned source: ' + str(path))
+    if actual != revision:
+        run(['git', '-C', str(path), 'fetch', 'origin', revision])
+        run(['git', '-C', str(path), 'checkout', '--detach', revision])
+
+
 def import_cache(archive: Path, destination: Path, expected: str, revision: str, platform: str) -> None:
     # Validate all metadata and paths before writing any cache/runtime entries.
     if digest(archive) != expected:
@@ -117,6 +133,14 @@ def main() -> None:
     picker: Path = ROOT / '.build/dependencies/file_manager'
     source(gui, lock['repository'], lock['revision'])
     source(picker, lock['picker_repository'], lock['picker_revision'])
+    # The standalone stx_rtf2md package has its own pin of the same repository
+    # (pin_note in the lock). SWIFTEDIT_STX_RTF2MD_SOURCE may name a local tree
+    # containing stx_rtf2md/ for development before a revision lands; the
+    # manifest then records it, and Build-Native.py refuses to package it.
+    stx_override: str = os.environ.get('SWIFTEDIT_STX_RTF2MD_SOURCE', '')
+    stx: Path = Path(stx_override) if stx_override else ROOT / '.build/dependencies/stx_rtf2md'
+    if not stx_override:
+        sparse_source(stx, lock['stx_rtf2md_repository'], lock['stx_rtf2md_revision'], 'stx_rtf2md')
     # Frontend CMake declares the public backend client even for picker-only builds.
     # Initialize its recorded gitlink, but do not build or package backend services.
     run(['git', '-C', str(picker), 'submodule', 'update', '--init', '--depth', '1', '--', 'backend'])
@@ -174,7 +198,14 @@ def main() -> None:
     notices: Path = sdk / 'picker-sdk/share/licenses/FileManagerDocumentPicker'
     notices.mkdir(parents=True, exist_ok=True)
     shutil.copy2(picker / 'LICENSE', notices / 'LICENSE')
+    run(['cmake', '-S', str(stx / 'stx_rtf2md'), '-B', str(build / 'stx-rtf2md')] + common + [
+        '-DCMAKE_INSTALL_LIBDIR=lib', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON', '-DSTX_RTF2MD_TESTS=OFF',
+        '-DCMAKE_INSTALL_PREFIX=' + str(sdk / 'stx-rtf2md-sdk')])
+    run(['cmake', '--build', str(build / 'stx-rtf2md'), '--parallel', jobs])
+    run(['cmake', '--install', str(build / 'stx-rtf2md')])
+    stx_revision: str = 'local:' + str(stx) if stx_override else lock['stx_rtf2md_revision']
     manifest: dict = {'provider_revision': lock['revision'], 'picker_revision': lock['picker_revision'],
+        'stx_rtf2md_revision': stx_revision,
         'platform': arguments.platform, 'dependency_mode': 'pinned-source-public-installed-targets',
         'compiler': subprocess.check_output(['clang', '--version'], text=True).strip()}
     (sdk / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

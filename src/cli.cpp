@@ -5,6 +5,8 @@
 #include "session_copy.hpp"
 #include "session_search.hpp"
 #include "session_text_copy.hpp"
+#include "rtf_import.hpp"
+#include "document.hpp"
 #include <charconv>
 #include <iostream>
 #include <stdexcept>
@@ -391,6 +393,30 @@ int main(int argc, char **argv) {
             } else if (cmd == "save-text-copy") {
                 require_field_count(f, 2);
                 session.save_text_copy(path(f[1]));
+            } else if (cmd == "rtf-to-markdown") {
+                // Converts an RTF file into a new Markdown file; never replaces
+                // an existing target and never touches the session document.
+                require_field_count(f, 3);
+                const notepad::FileSnapshot source = notepad::read_file(path(f[1]));
+                if (!source.exists)
+                    throw std::runtime_error("The RTF source does not exist.");
+                if (!notepad::looks_like_rtf(source.bytes))
+                    throw std::runtime_error("The source is not RTF; it does not begin {\\rtf.");
+                const notepad::RtfImport imported = notepad::import_rtf(source.bytes);
+                const notepad::FileSnapshot absent{};
+                static_cast<void>(notepad::write_file(path(f[2]), imported.markdown, absent));
+                std::cout << "rtf-body";
+                field(imported.body);
+                std::cout << '\n';
+                std::size_t start = 0;
+                while (start < imported.losses.size()) {
+                    const std::size_t end = imported.losses.find('\n', start);
+                    std::cout << "rtf-loss";
+                    field(std::string_view(imported.losses).substr(start, end - start));
+                    std::cout << '\n';
+                    start = end + 1;
+                }
+                std::cout << "rtf-written\t" << imported.markdown.size() << '\n';
             } else
                 throw std::runtime_error("Unknown command.");
             std::cout << "ok\t" << cmd << '\t' << session.revision().value << '\n';

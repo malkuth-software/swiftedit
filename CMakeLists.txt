@@ -11,6 +11,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
 find_package(Threads REQUIRED)
 find_package(GUIForms 0.1 CONFIG REQUIRED COMPONENTS Application)
+# The standalone RTF/markdown package, pinned apart from the GUI.Forms SDK
+# (pin_note in ci/dependencies.json).
+find_package(stx_rtf2md 0.1 CONFIG REQUIRED)
 add_library(swiftedit_md4c STATIC third_party/md4c/md4c.c third_party/md4c/entity.c)
 target_include_directories(swiftedit_md4c PUBLIC third_party/md4c)
 if(WIN32)
@@ -38,6 +41,11 @@ target_link_libraries(swiftedit-terminal-reveal-bench PRIVATE notepad_document)
 # Application owns the shared Core used by the GUI and document model. Linking
 # static Core here would put two incompatible Core instances in the editor.
 target_link_libraries(notepad_document PUBLIC GUIForms::Application PRIVATE swiftedit_md4c Threads::Threads)
+target_sources(notepad_document PRIVATE src/rtf_import.cpp)
+target_link_libraries(notepad_document PRIVATE stx_rtf2md::stx_rtf2md)
+add_executable(swiftedit-rtf-import-tests tests/rtf_import_tests.cpp)
+target_link_libraries(swiftedit-rtf-import-tests PRIVATE notepad_document)
+add_test(NAME rtf-import COMMAND swiftedit-rtf-import-tests)
 target_compile_definitions(notepad_document PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 enable_testing()
 if(WIN32)

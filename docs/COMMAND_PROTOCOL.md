@@ -47,6 +47,7 @@ returns `ok<TAB>quit`. Requests exceeding 32 MiB of transport text are rejected.
 | `csv-calculate`, expression | Returns exact result and referenced cells, no document mutation |
 | `csv-value`, A1 | Returns the cell's displayed value and direct formula references; stored formula source is unchanged |
 | `csv-convert-to-value`, A1 | Previews replacement of a formula by its exact value; explicit commit required; errors preserve source |
+| `rtf-to-markdown`, rtf-path, new-path | Converts an RTF file into a new Markdown file in the stx_rtf2md dialect; never replaces an existing target and never touches the session document. Emits `rtf-body, body size and rule`, one `rtf-loss, sentence` per kind of formatting not kept, then `rtf-written, markdown-bytes`. A source not beginning `{\rtf`, unreadable RTF or a code page other than Windows-1252 is an error; nothing is written |
 | `quit` | Ends session; unsaved state is discarded |
 
 Preview rows contain `preview, token, revision, byte-offset, removed-byte-count,

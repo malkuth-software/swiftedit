@@ -189,6 +189,9 @@ private:
     void show_markdown(bool);
     void focus_text();
     void error(const std::string &);
+    // Opens converted RTF as a new untitled Markdown document (owner decision
+    // 5): the current document is replaced only after conversion succeeds.
+    void import_rtf_file(std::string_view bytes);
     gf::HostDialogChoice message(std::string title, std::string text,
                                  gf::HostMessageButtons buttons = gf::HostMessageButtons::ok);
     void after_unsaved(Continuation continuation);

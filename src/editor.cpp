@@ -2,6 +2,7 @@
 #include "session.hpp"
 #include "characters.hpp"
 #include "date_time.hpp"
+#include "rtf_import.hpp"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -480,6 +481,13 @@ void Editor::open_file(const std::filesystem::path &source) {
     if (pending_save_ || conflict_review_)
         throw std::runtime_error(
             "Finish or cancel the pending save before opening another document.");
+    if (has_rtf_extension(path_utf8(source.filename()))) {
+        const FileSnapshot snapshot = read_file(source);
+        if (looks_like_rtf(snapshot.bytes)) {
+            import_rtf_file(snapshot.bytes);
+            return;
+        }
+    }
     Document next{};
     next.open(source);
     const gf::TextBox::MultilineValidation supported =
@@ -498,6 +506,37 @@ void Editor::open_file(const std::filesystem::path &source) {
     (*text_).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
     refresh();
     focus_text();
+}
+void Editor::import_rtf_file(std::string_view bytes) {
+    const RtfImport imported = import_rtf(bytes);
+    const gf::TextBox::MultilineValidation supported =
+        gf::TextBox::validate_multiline_text(imported.markdown);
+    if (supported != gf::TextBox::MultilineValidation::valid)
+        throw std::runtime_error(
+            "The converted Markdown exceeds this development editor's 1 MiB or 4096-byte line "
+            "limit. The current document was kept.");
+    show_markdown(false);
+    show_csv(false);
+    (*text_).set_text(imported.markdown);
+    cancel_search();
+    save_identity_.reset();
+    // Untitled and unsaved: the converted text is dirty until saved as Markdown.
+    document_ = Document{};
+    (*text_).set_newline_sequence(preferred_newline(imported.markdown));
+    (*text_).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
+    refresh();
+    focus_text();
+    std::string summary = "The RTF file was converted to Markdown as a new untitled document. Sizes "
+                          "are relative to its body text, " +
+                          imported.body + ".";
+    summary += imported.losses.empty() ? "\n\nNothing was lost." : "\n\nNot kept:\n" + imported.losses;
+    try {
+        static_cast<void>(message("RTF imported as Markdown", summary));
+    } catch (const std::exception &) {
+        // Without a dialog service the summary goes to the status line.
+        error(imported.losses.empty() ? "RTF imported as Markdown; nothing was lost."
+                                      : "RTF imported as Markdown; some formatting was not kept.");
+    }
 }
 bool Editor::save_to(const std::filesystem::path &path, const FileSnapshot &expected) {
     try {
