@@ -721,6 +721,42 @@ void verify_file_shortcuts() {
     check(services.dialogs == 0, "Shortcut operations do not spuriously prompt");
     host.shutdown();
 }
+void verify_startup_rtf_summary() {
+    // A file named at startup is imported inside the ready callback; its
+    // summary must still reach a dialog once the window dispatches.
+    const std::filesystem::path directory = std::filesystem::temp_directory_path() /
+        ("swiftedit-startup-rtf-" + std::to_string(test_process_id()));
+    check(std::filesystem::create_directory(directory), "Own startup RTF fixture");
+    struct Cleanup {
+        std::filesystem::path directory{};
+        ~Cleanup() {
+            std::error_code ignored{};
+            std::filesystem::remove_all(directory, ignored);
+        }
+    } cleanup{directory};
+    const std::filesystem::path path = directory / "letter.rtf";
+    static_cast<void>(notepad::write_file(path, R"({\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}\fs22 Hello {\b bold}\par})", {}));
+    const std::shared_ptr<notepad::Editor> editor =
+        gf::make_control<notepad::Editor>(gf::StableId("startup-rtf.editor"));
+    std::vector<gf::ApplicationWindow> windows = (*editor).application_windows(path);
+    gf::Window &window = *windows.front().model;
+    TestServices services{};
+    gf::HostSession host(window, capabilities(), &services);
+    const gf::HostDispatchResult attached = host.dispatch({1, 0, gf::HostAttachEvent{{800, 600}, 1}});
+    check(attached.accepted(), "Startup RTF host attached");
+    windows.front().options.ready(window, {});
+    window.perform_layout();
+    check((*(*editor).text_control()).text().find("**bold**") != std::string::npos,
+          "Startup RTF opens as converted Markdown");
+    static_cast<void>(window.drain_posted_work());
+    check(services.dialogs == 0, "The import summary waits past the creation turn's posted work");
+    static_cast<void>(window.poll_frame_schedule(gf::FrameClock::now() + std::chrono::seconds(1)));
+    check(services.dialogs == 1 && services.last_message.find("converted to Markdown") != std::string::npos,
+          "The startup import summary is shown from the frame loop");
+    static_cast<void>(window.poll_frame_schedule(gf::FrameClock::now() + std::chrono::seconds(2)));
+    check(services.dialogs == 1, "The import summary is shown once");
+    host.shutdown();
+}
 void verify_query_occurrence_history() {
     const std::shared_ptr<notepad::QueryField> query =
         gf::make_control<notepad::QueryField>(gf::StableId("query.history"));
@@ -806,6 +842,7 @@ int main(const int argc, char **const argv) {
         verify_query_occurrence_history();
         verify_callback_revocation();
         verify_file_shortcuts();
+        verify_startup_rtf_summary();
         verify_picker_home();
 #ifndef _WIN32
         verify_picker_directory_links();

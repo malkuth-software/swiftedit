@@ -22,6 +22,7 @@ Editor::~Editor() {
 }
 void Editor::on_dispose() noexcept {
     cancel_search();
+    import_summary_frame_.disconnect();
     pending_save_.reset();
     conflict_review_.reset();
     after_save_ = Continuation::none;
@@ -86,10 +87,12 @@ void Editor::PostedClose::operator()() const {
     if (self)
         static_cast<void>((*self).handle_.request_close());
 }
-void Editor::PostedImportSummary::operator()() const {
+void Editor::ImportSummaryTick::operator()(gf::FrameTime) const {
     const std::shared_ptr<Editor> self = lock_alive(owner);
-    if (self)
-        (*self).show_import_summary();
+    if (!self)
+        return;
+    (*self).import_summary_frame_.disconnect();
+    (*self).show_import_summary();
 }
 void Editor::continue_operation(Continuation next) {
     switch (next) {
@@ -538,12 +541,16 @@ void Editor::import_rtf_file(std::string_view bytes) {
     import_status_ = imported.losses.empty() ? "RTF imported as Markdown; nothing was lost."
                                              : "RTF imported as Markdown; some formatting was not kept.";
     // A file named at startup is imported inside the window's ready callback,
-    // before the window is shown and can own a dialog, so the summary waits
-    // for the window's next dispatch.
-    if (window())
-        static_cast<void>((*window()).begin_invoke(shared_from_this(), PostedImportSummary{observe()}));
-    else
+    // while the host is still creating the window. Work posted there runs in
+    // that same creation turn, too early for a modal dialog, so the summary
+    // waits for the host's frame loop, which runs only once the window is up.
+    if (window()) {
+        const gf::FrameTime deadline = gf::FrameClock::now() + std::chrono::milliseconds(1);
+        import_summary_frame_ = (*window()).schedule_ui_timer(*this, gf::minimum_ui_timer_interval, deadline,
+                                                              ImportSummaryTick{observe()});
+    } else {
         show_import_summary();
+    }
 }
 void Editor::show_import_summary() {
     if (import_summary_.empty())

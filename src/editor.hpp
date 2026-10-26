@@ -126,9 +126,9 @@ private:
         std::weak_ptr<Editor> owner{};
         void operator()() const;
     };
-    struct PostedImportSummary {
+    struct ImportSummaryTick {
         std::weak_ptr<Editor> owner{};
-        void operator()() const;
+        void operator()(gf::FrameTime) const;
     };
     struct WindowReady {
         std::weak_ptr<Editor> owner{};
@@ -262,6 +262,7 @@ private:
     std::optional<PendingSave> pending_save_{};
     // The summary of an RTF import not yet shown, and its status-line form.
     std::string import_summary_{}, import_status_{};
+    gf::FrameRequestToken import_summary_frame_{};
     CharacterWindow characters_{}, controls_{};
     std::shared_ptr<QueryField> query_{};
     std::shared_ptr<gf::TextBox> replacement_{};
