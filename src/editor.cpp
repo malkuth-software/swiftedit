@@ -86,6 +86,11 @@ void Editor::PostedClose::operator()() const {
     if (self)
         static_cast<void>((*self).handle_.request_close());
 }
+void Editor::PostedImportSummary::operator()() const {
+    const std::shared_ptr<Editor> self = lock_alive(owner);
+    if (self)
+        (*self).show_import_summary();
+}
 void Editor::continue_operation(Continuation next) {
     switch (next) {
     case Continuation::none:
@@ -526,16 +531,32 @@ void Editor::import_rtf_file(std::string_view bytes) {
     (*text_).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
     refresh();
     focus_text();
-    std::string summary = "The RTF file was converted to Markdown as a new untitled document. Sizes "
-                          "are relative to its body text, " +
-                          imported.body + ".";
-    summary += imported.losses.empty() ? "\n\nNothing was lost." : "\n\nNot kept:\n" + imported.losses;
+    import_summary_ = "The RTF file was converted to Markdown as a new untitled document. Sizes "
+                      "are relative to its body text, " +
+                      imported.body + ".";
+    import_summary_ += imported.losses.empty() ? "\n\nNothing was lost." : "\n\nNot kept:\n" + imported.losses;
+    import_status_ = imported.losses.empty() ? "RTF imported as Markdown; nothing was lost."
+                                             : "RTF imported as Markdown; some formatting was not kept.";
+    // A file named at startup is imported inside the window's ready callback,
+    // before the window is shown and can own a dialog, so the summary waits
+    // for the window's next dispatch.
+    if (window())
+        static_cast<void>((*window()).begin_invoke(shared_from_this(), PostedImportSummary{observe()}));
+    else
+        show_import_summary();
+}
+void Editor::show_import_summary() {
+    if (import_summary_.empty())
+        return;
+    const std::string summary = std::move(import_summary_);
+    const std::string status = std::move(import_status_);
+    import_summary_.clear();
+    import_status_.clear();
     try {
         static_cast<void>(message("RTF imported as Markdown", summary));
     } catch (const std::exception &) {
         // Without a dialog service the summary goes to the status line.
-        error(imported.losses.empty() ? "RTF imported as Markdown; nothing was lost."
-                                      : "RTF imported as Markdown; some formatting was not kept.");
+        error(status);
     }
 }
 bool Editor::save_to(const std::filesystem::path &path, const FileSnapshot &expected) {
