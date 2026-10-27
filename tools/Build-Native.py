@@ -45,36 +45,61 @@ def main() -> None:
     arguments: argparse.Namespace = parser.parse_args()
     if arguments.jobs < 1:
         parser.error('--jobs must be positive')
-    build: Path = Path('.build/native-' + arguments.platform + '/app').resolve()
-    sdk: Path = build.parent / 'sdk'
+    # SWIFTEDIT_LOCKSTEP (local builds only; tools/prepare_dependencies.py)
+    # builds against the machine's lockstep GUI.Forms in trees of its own. It
+    # turns the native window tests off and never packages.
+    lockstep: bool = bool(os.environ.get('SWIFTEDIT_LOCKSTEP', ''))
+    build: Path = Path('.build/native-' + arguments.platform + ('/app-lockstep' if lockstep else '/app')).resolve()
+    sdk: Path = build.parent / ('sdk-lockstep' if lockstep else 'sdk')
     manifest: dict = json.loads((sdk / 'manifest.json').read_text(encoding='utf-8'))
     dependencies: dict = json.loads(Path('ci/dependencies.json').read_text())
-    if (manifest['provider_revision'] != dependencies['revision']
-            or manifest['picker_revision'] != dependencies['picker_revision']
-            or manifest.get('stx_rtf2md_revision') != dependencies['revision']
-            or manifest['platform'] != arguments.platform):
-        raise RuntimeError('Installed packages differ from the dependency lock')
-    lock: dict = {'provider_revision': dependencies['revision']}
-    gui: Path = sdk / 'gui-forms-sdk'
-    os.environ['GUI_FORMS_FONT_DIR'] = str(gui / 'share/GUIForms/fonts')
+    gui: Path
+    toolchain: Path
+    prefix: str
+    if lockstep:
+        if (manifest.get('dependency_mode') != 'lockstep-installed-prefix'
+                or manifest['picker_revision'] != dependencies['picker_revision']
+                or manifest['platform'] != arguments.platform):
+            raise RuntimeError('The lockstep packages differ from the dependency lock; run prepare_dependencies.py')
+        gui = Path(manifest['gui_forms_prefix'])
+        toolchain = Path(manifest['toolchain_file'])
+        os.environ['GUI_FORMS_FONT_DIR'] = manifest['font_dir']
+        os.environ['CCACHE_DIR'] = manifest['ccache_dir']
+        if manifest['llvm_runtime']:
+            os.environ['GUI_FORMS_LLVM_RUNTIME'] = manifest['llvm_runtime']
+        # The lockstep prefix carries stx_rtf2md beside GUI.Forms.
+        prefix = str(gui) + ';' + str(sdk / 'picker-sdk')
+    else:
+        if (manifest['provider_revision'] != dependencies['revision']
+                or manifest['picker_revision'] != dependencies['picker_revision']
+                or manifest.get('stx_rtf2md_revision') != dependencies['revision']
+                or manifest['platform'] != arguments.platform):
+            raise RuntimeError('Installed packages differ from the dependency lock')
+        gui = sdk / 'gui-forms-sdk'
+        toolchain = Path('gui_forms/cmake/llvm22.cmake').resolve()
+        os.environ['GUI_FORMS_FONT_DIR'] = str(gui / 'share/GUIForms/fonts')
+        os.environ['CCACHE_DIR'] = str(Path('.ccache').resolve())
+        if arguments.platform == 'macos-arm64':
+            os.environ['GUI_FORMS_LLVM_RUNTIME'] = str(Path('.build/toolchain/llvm-22.1.8-macos14').resolve())
+        prefix = str(gui) + ';' + str(sdk / 'picker-sdk') + ';' + str(sdk / 'stx-rtf2md-sdk')
+    lock: dict = {'provider_revision': manifest['provider_revision']}
     os.environ['PATH'] = str(gui / 'bin') + os.pathsep + os.environ['PATH']
-    os.environ['CCACHE_DIR'] = str(Path('.ccache').resolve())
     os.environ['CCACHE_BASEDIR'] = str(Path('.').resolve())
     os.environ['CCACHE_COMPILERCHECK'] = 'content'
-    if arguments.platform == 'macos-arm64':
-        os.environ['GUI_FORMS_LLVM_RUNTIME'] = str(Path('.build/toolchain/llvm-22.1.8-macos14').resolve())
-    prefix: str = str(gui) + ';' + str(sdk / 'picker-sdk') + ';' + str(sdk / 'stx-rtf2md-sdk')
     if not arguments.test_package_only:
         run(['cmake', '-S', '.', '-B', str(build), '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
              '-DSWIFTEDIT_RELEASE_VERSION=' + project_version(),
-             '-DCMAKE_PREFIX_PATH=' + prefix, '-DNOTEPAD_NATIVE_TESTS=ON',
-             '-DCMAKE_TOOLCHAIN_FILE=' + str(Path('gui_forms/cmake/llvm22.cmake').resolve()),
+             '-DCMAKE_PREFIX_PATH=' + prefix, '-DNOTEPAD_NATIVE_TESTS=' + ('OFF' if lockstep else 'ON'),
+             '-DCMAKE_TOOLCHAIN_FILE=' + str(toolchain),
              '-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
              '-DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache'])
         run(['cmake', '--build', str(build), '--parallel', str(arguments.jobs)])
     if arguments.build_only:
         return
     run(['ctest', '--test-dir', str(build), '--output-on-failure', '--timeout', '60'])
+    if lockstep:
+        print('Lockstep build tested. Evidence and packages come only from pinned builds.', flush=True)
+        return
     benchmark: Path = build / ('swiftedit-terminal-end-bench.exe' if os.name == 'nt'
                                else 'swiftedit-terminal-end-bench')
     evidence: Path = build / 'terminal-end-evidence'

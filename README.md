@@ -86,6 +86,18 @@ Cache misses compile from pinned source. Integrity failures stop the import.
 The source directory layout matches the provider's cache contract. Provider
 sources stay in ignored directories; SwiftEdit links their exported CMake targets.
 
+On a machine with a shared GUI.Forms lockstep build, set `SWIFTEDIT_LOCKSTEP`
+to its record (for example `D:/malkuth/cache/lockstep/current-windows-x64.json`).
+`prepare_dependencies.py` then builds only the picker against the record's
+installed prefix, and `tools/Build-Native.py --platform windows-x64` builds and
+tests SwiftEdit in `.build/native-<platform>/app-lockstep`, without native
+window tests and without packaging; packages come only from pinned builds.
+`harness.lock` pins template_harness and must equal the GUI.Forms pin's
+`gui_forms/harness.lock`.
+The `cli` test runs `tests/cli_tests.ps1` with the first of `pwsh` or
+`powershell` on PATH. Windows PowerShell's default execution policy refuses
+the script, so put PowerShell 7 (`pwsh`) on PATH for local runs, as CI does.
+
 `cmake --build --preset windows-x64 --target swiftedit-app` builds the GUI,
 terminal and CLI. `swiftedit-check` builds the test executables and runs CTest.
 `swiftedit-package` creates the platform archive and performs packaged startup
