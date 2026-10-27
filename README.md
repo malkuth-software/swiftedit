@@ -18,6 +18,10 @@ platform. These are public downloads; GitHub sign-in is not required.
 Portable ZIPs and Linux tarballs remain available. Extract the entire archive
 before launching the application. Releases through v0.3.10 contain portable archives only.
 
+The installers name Malkuth Software as their vendor. The Linux package is
+still `swiftedit`, and install locations, the Windows uninstall entry and Start
+menu folder are unchanged, so earlier installations upgrade in place.
+
 Mac builds are ad-hoc signed and not notarized; Windows builds are unsigned.
 Each release includes SHA-256 checksums and source/SDK manifests. The terminal
 editor is included on all three platforms. Builds after v0.3.0 also include the
