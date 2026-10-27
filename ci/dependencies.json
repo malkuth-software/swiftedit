@@ -4,7 +4,7 @@
   "picker_repository": "falseywinchnet/file_manager",
   "picker_revision": "964261f33031db3cec48fd4cacd84f78f3843548",
   "stx_rtf2md_repository": "malkuth-software/gui_forms",
-  "stx_rtf2md_revision": "0101ebf0fc568acf2be431c8b9c70d08244370ff",
+  "stx_rtf2md_revision": "1794ab59dc64591e30eb13ee2d303353ad61eb82",
   "pin_note": "Two pins of malkuth-software/gui_forms (formerly falseywinchnet/gui_forms). revision is the GUI.Forms SDK, held where the File Manager picker accepts GUIForms 0.1. stx_rtf2md_revision builds only the standalone stx_rtf2md package, which has no GUI.Forms dependency, at the later revision that contains it. Fold the two into one when the SDK pin moves.",
   "cache_sha256": {
     "windows-x64": "a26cd3227f114041a60249c0525c9c5d87b0282ce3adb25f9fbedb964ff5c6ca",

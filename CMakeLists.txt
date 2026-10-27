@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(SwiftEdit VERSION 0.3.10 LANGUAGES C CXX)
+project(SwiftEdit VERSION 0.4.0 LANGUAGES C CXX)
 set(SWIFTEDIT_RELEASE_VERSION "${PROJECT_VERSION}" CACHE STRING "Tested publication version")
 if(NOT SWIFTEDIT_RELEASE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
   message(FATAL_ERROR "SWIFTEDIT_RELEASE_VERSION must be numeric major.minor.patch")
