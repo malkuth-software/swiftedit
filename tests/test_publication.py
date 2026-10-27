@@ -8,7 +8,7 @@ import unittest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'tools'))
 from publication_version import select, validate
 from release_contract import checked_files, digest
-from installers import windows_script, build_and_verify, nsis_command
+from installers import windows_script, build_and_verify, nsis_command, debian_control
 from unittest.mock import patch
 
 
@@ -94,6 +94,16 @@ class PublicationTests(unittest.TestCase):
             self.assertIn('Delete "$INSTDIR\\fonts\\example.ttf"', script)
             self.assertNotIn('RMDir /r', script)
             self.assertNotIn('Delete "$INSTDIR\\*', script)
+
+    def test_vendor_identity_keeps_upgrade_paths(self) -> None:
+        script: str = windows_script(Path('D:/fixture/app'), Path('D:/fixture/setup.exe'), '0.4.1')
+        self.assertIn('VIAddVersionKey "CompanyName" "Malkuth Software"', script)
+        self.assertIn('"Publisher" "Malkuth Software"', script)
+        self.assertIn('InstallDir "$LOCALAPPDATA\\Programs\\SwiftEdit"', script)
+        self.assertIn('CurrentVersion\\Uninstall\\SwiftEdit"', script)
+        control: str = debian_control('0.4.1', 'amd64', 'libc6')
+        self.assertIn('Package: swiftedit\n', control)
+        self.assertIn('Maintainer: Malkuth Software <maintainer@malkuthsoft.com>\n', control)
 
     def test_installation_is_not_started_on_developer_machine(self) -> None:
         with patch.dict('os.environ', {'GITHUB_ACTIONS': 'false'}):

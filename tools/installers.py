@@ -9,6 +9,18 @@ import tempfile
 from publication_version import project_version
 
 
+# The installer vendor identity (owner, 2026-10-27: "Malkuth Software" for
+# every product). Install locations, the Windows uninstall key, the Start
+# menu folder and the Linux commands and paths stay as earlier releases
+# left them, so an installed SwiftEdit upgrades in place.
+VENDOR: str = 'Malkuth Software'
+MACOS_PACKAGE_IDENTIFIER: str = 'com.malkuthsoft.swiftedit'
+# The Debian package keeps the product's own name: the vendor's name does not
+# go into package names (owner, 2026-10-27).
+DEBIAN_PACKAGE: str = 'swiftedit'
+DEBIAN_MAINTAINER: str = 'Malkuth Software <maintainer@malkuthsoft.com>'
+
+
 def run(arguments: list[str], cwd: Path | None = None) -> str:
     result: subprocess.CompletedProcess[str] = subprocess.run(arguments, cwd=cwd,
         text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=180)
@@ -96,6 +108,7 @@ def windows_script(bundle: Path, installer: Path, version: str) -> str:
         'InstallDirRegKey HKCU "' + uninstall_key + '" "InstallLocation"',
         'RequestExecutionLevel user', 'VIProductVersion "' + version + '.0"',
         'VIAddVersionKey "ProductName" "SwiftEdit"',
+        'VIAddVersionKey "CompanyName" "' + VENDOR + '"',
         'VIAddVersionKey "FileDescription" "SwiftEdit Installer"',
         'VIAddVersionKey "FileVersion" "' + version + '"',
         '!insertmacro MUI_PAGE_WELCOME', '!insertmacro MUI_PAGE_DIRECTORY',
@@ -109,6 +122,7 @@ def windows_script(bundle: Path, installer: Path, version: str) -> str:
         'WriteUninstaller "$INSTDIR\\Uninstall.exe"',
         'WriteRegStr HKCU "' + uninstall_key + '" "DisplayName" "SwiftEdit"',
         'WriteRegStr HKCU "' + uninstall_key + '" "DisplayVersion" "' + version + '"',
+        'WriteRegStr HKCU "' + uninstall_key + '" "Publisher" "' + VENDOR + '"',
         'WriteRegStr HKCU "' + uninstall_key + '" "InstallLocation" "$INSTDIR"',
         'WriteRegStr HKCU "' + uninstall_key + '" "DisplayIcon" "$INSTDIR\\SwiftEdit.exe"',
         'WriteRegStr HKCU "' + uninstall_key + '" "UninstallString" \'$\\"$INSTDIR\\Uninstall.exe$\\"\'',
@@ -177,7 +191,7 @@ def macos(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
         record['BundleIsRelocatable'] = False
     components.write_bytes(plistlib.dumps(records))
     run(['pkgbuild', '--root', str(root), '--component-plist', str(components),
-         '--install-location', '/Applications', '--identifier', 'org.rainstar.swiftedit',
+         '--install-location', '/Applications', '--identifier', MACOS_PACKAGE_IDENTIFIER,
          '--version', version, str(installer)])
     installed: Path = Path('/Applications/SwiftEdit.app')
     if installed.exists():
@@ -187,6 +201,15 @@ def macos(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
     run(['codesign', '--verify', '--deep', '--strict', str(installed)])
     smoke(installed / 'Contents/MacOS/SwiftEdit', installed / 'Contents/MacOS/swiftedit-cli', scratch)
     return installer, 'system installation, payload hashes, signature and installed GUI/CLI startup passed'
+
+
+def debian_control(version: str, architecture: str, dependencies: str) -> str:
+    """The installed package's DEBIAN/control, naming the vendor as maintainer."""
+    result: str = ('Package: ' + DEBIAN_PACKAGE + '\nVersion: ' + version + '\nArchitecture: ' + architecture + '\n'
+        'Maintainer: ' + DEBIAN_MAINTAINER + '\nSection: editors\nPriority: optional\n'
+        'Depends: ' + dependencies + '\n'
+        'Description: Native text editor with Markdown and CSV views\n')
+    return result
 
 
 def linux(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
@@ -210,9 +233,10 @@ def linux(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
         'MimeType=text/plain;text/markdown;text/csv;\n', encoding='utf-8')
     metadata: Path = scratch / 'debian/control'
     metadata.parent.mkdir()
-    metadata.write_text('Source: swiftedit\nSection: editors\nPriority: optional\n'
-        'Maintainer: SwiftEdit contributors <noreply@rainstar.invalid>\n\n'
-        'Package: swiftedit\nArchitecture: amd64\nDescription: SwiftEdit native text editor\n', encoding='utf-8')
+    metadata.write_text('Source: ' + DEBIAN_PACKAGE + '\nSection: editors\nPriority: optional\n'
+        'Maintainer: ' + DEBIAN_MAINTAINER + '\n\n'
+        'Package: ' + DEBIAN_PACKAGE + '\nArchitecture: amd64\nDescription: SwiftEdit native text editor\n',
+        encoding='utf-8')
     arguments: list[str] = ['dpkg-shlibdeps', '-O', '-l' + str(installed / 'lib'), '--ignore-missing-info']
     binary: Path
     for binary in list((installed / 'bin').iterdir()) + list((installed / 'lib').iterdir()):
@@ -227,17 +251,14 @@ def linux(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
         raise RuntimeError('Could not determine Debian runtime dependencies')
     control: Path = root / 'DEBIAN/control'
     control.parent.mkdir()
-    control.write_text('Package: swiftedit\nVersion: ' + version + '\nArchitecture: amd64\n'
-        'Maintainer: SwiftEdit contributors <noreply@rainstar.invalid>\nSection: editors\n'
-        'Priority: optional\nDepends: ' + dependencies + '\n'
-        'Description: Native text editor with Markdown and CSV views\n', encoding='utf-8')
+    control.write_text(debian_control(version, 'amd64', dependencies), encoding='utf-8')
     run(['dpkg-deb', '--root-owner-group', '--build', str(root), str(installer)])
     if Path('/usr/lib/swiftedit').exists():
         raise RuntimeError('Refusing to replace a pre-existing application during CI installation test')
     run(['sudo', 'apt-get', 'install', '-y', str(installer)])
     verify_payload(bundle, Path('/usr/lib/swiftedit'))
     smoke(Path('/usr/bin/swiftedit'), Path('/usr/bin/swiftedit-cli'), scratch)
-    run(['sudo', 'apt-get', 'remove', '-y', 'swiftedit'])
+    run(['sudo', 'apt-get', 'remove', '-y', DEBIAN_PACKAGE])
     if Path('/usr/bin/swiftedit').exists():
         raise RuntimeError('Debian uninstall left launcher behind')
     return installer, 'system installation, payload hashes, installed GUI/CLI startup and package removal passed'
