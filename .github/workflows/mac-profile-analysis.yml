@@ -1,6 +1,16 @@
 name: Export recorded Mac CPU samples
 on:
   workflow_dispatch:
+    inputs:
+      run_id:
+        description: The provider run that recorded mac-cpu-profile-<run_id>
+        required: true
+        type: string
+      repository:
+        description: The provider repository holding that run
+        required: true
+        default: malkuth-software/file_manager
+        type: string
 permissions:
   contents: read
   actions: read
@@ -10,10 +20,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Download the existing provider recording
+      # The recording this once named (falseywinchnet/file_manager run
+      # 36963650387) went with that repository's old history, so the run is
+      # now chosen when the workflow is started.
+      - name: Download the provider recording
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh run download 36963650387 --repo falseywinchnet/file_manager --name mac-cpu-profile-36963650387 --dir .build/profile-input
+          PROFILE_RUN: ${{ inputs.run_id }}
+          PROFILE_REPOSITORY: ${{ inputs.repository }}
+        run: gh run download "$PROFILE_RUN" --repo "$PROFILE_REPOSITORY" --name "mac-cpu-profile-$PROFILE_RUN" --dir .build/profile-input
       - name: Export focused samples and signposts
         run: python3 -B tools/Export-Mac-Profile.py --input .build/profile-input --output .build/profile-export
       - name: Preserve export diagnostics and samples
