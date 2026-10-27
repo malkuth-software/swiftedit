@@ -1,0 +1,2 @@
+bytes=67108864 budget=4096 samples=49152 words=26843136 p50_ms=0.01 p95_ms=0.0171 p99_ms=0.0201 worst_ms=0.1423 mean_scan_ms=193.603
+bytes=67108864 budget=65536 samples=3072 words=26843136 p50_ms=0.128 p95_ms=0.1951 p99_ms=0.2588 worst_ms=0.4221 mean_scan_ms=142.002

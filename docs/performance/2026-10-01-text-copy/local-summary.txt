@@ -1,0 +1,12 @@
+ascii,step-wall-ms,samples=768,p50=0.229800,p95=0.368500,p99=0.435800,worst=0.496600
+ascii,prepare-wall-ms,samples=3,p50=0.445500,p95=1.013300,p99=1.013300,worst=1.013300
+ascii,publish-wall-ms,samples=3,p50=41.199900,p95=44.243100,p99=44.243100,worst=44.243100
+ascii,cancel-wall-ms,samples=3,p50=0.235600,p95=0.237100,p99=0.237100,worst=0.237100
+unicode,step-wall-ms,samples=768,p50=0.191200,p95=0.248600,p99=0.299300,worst=0.443700
+unicode,prepare-wall-ms,samples=3,p50=0.452100,p95=0.520400,p99=0.520400,worst=0.520400
+unicode,publish-wall-ms,samples=3,p50=59.479900,p95=62.331200,p99=62.331200,worst=62.331200
+unicode,cancel-wall-ms,samples=3,p50=0.197100,p95=0.238400,p99=0.238400,worst=0.238400
+invalid,step-wall-ms,samples=768,p50=0.195700,p95=0.262900,p99=0.307600,worst=0.378900
+invalid,prepare-wall-ms,samples=3,p50=0.456500,p95=0.510800,p99=0.510800,worst=0.510800
+invalid,publish-wall-ms,samples=3,p50=56.341700,p95=57.857700,p99=57.857700,worst=57.857700
+invalid,cancel-wall-ms,samples=3,p50=0.257100,p95=0.270200,p99=0.270200,worst=0.270200

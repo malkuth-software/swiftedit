@@ -1,0 +1,22 @@
+{
+  "source_revision": "0211b71a24ffc57024af45825a58562990ffa40e",
+  "provider_revision": "723cd7f9f8016d854f667f41e0c5dbcbe4cc0adf",
+  "platform": "macos-arm64",
+  "executable_sha256": "18d1354eb3cc200e7ee53167c30f4e68254a768b670d13b67f07607bbf57d692",
+  "status": "completed",
+  "scope": "headless SessionSearch steps; not native input-to-screen or idle CPU",
+  "fixture_bytes": 16777216,
+  "trials_per_mode": 3,
+  "modes": [
+    "literal Z",
+    "one-grapheme wildcard followed by literal Z"
+  ],
+  "comparison_work_budget": 4096,
+  "ordinary_source_context": 8192,
+  "percentiles": "nearest rank; per-step samples pooled across trials",
+  "clock_overhead": "included; step wall intervals include process CPU clock calls",
+  "cpu_clock": "GetProcessTimes on Windows, std::clock on POSIX; process-wide; resolution varies",
+  "cache_state": "not controlled; literal then wildcard, sequential trials",
+  "performance_threshold": "none",
+  "limits": "three simple-pattern fixtures; not exhaustive query-complexity coverage"
+}

@@ -1,0 +1,19 @@
+{
+  "repository": "falseywinchnet/file_manager",
+  "release": "sdk-6f5c854",
+  "provider_revision": "6f5c854e61612fadf38c35c18d06c447c5e49e4d",
+  "archives": {
+    "macos-arm64": {
+      "name": "gui-forms-picker-macos-arm64-6f5c854e61612fadf38c35c18d06c447c5e49e4d.zip",
+      "sha256": "8adadcb0fdf54461462897d8c1aa4d927522dd8ba1208d68693e0d1657378748"
+    },
+    "windows-x64": {
+      "name": "gui-forms-picker-windows-x64-6f5c854e61612fadf38c35c18d06c447c5e49e4d.zip",
+      "sha256": "51cf451785053ce5f36bc182fb4f6c39df8690dddf3b7b92784306d04f938709"
+    },
+    "linux-x64": {
+      "name": "gui-forms-picker-linux-x64-6f5c854e61612fadf38c35c18d06c447c5e49e4d.zip",
+      "sha256": "00d1dc5b53a6b25d9e36cd8f53edc40d32c6356236526a37f004691b12d9b625"
+    }
+  }
+}

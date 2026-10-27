@@ -1,0 +1,7 @@
+.build/
+dist/
+work/
+*.user
+gui_forms/
+.ccache/
+__pycache__/

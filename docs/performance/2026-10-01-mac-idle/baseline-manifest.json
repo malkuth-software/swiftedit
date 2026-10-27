@@ -1,0 +1,33 @@
+{
+  "product": "SwiftEdit",
+  "source_revision": "5d09897b312dea056f60106ec71ff973877bc4c2",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "signature": "ad-hoc; not Developer ID signed or notarized",
+  "packaged_startup": "remained running for five seconds on a disposable text fixture",
+  "idle_cpu_observation": {
+    "warmup_seconds": 5,
+    "elapsed_seconds": 10.104475374999993,
+    "process_cpu_seconds": 0.24,
+    "percent_of_one_core": 2.375185163930395,
+    "scope": "ten quiet seconds with an empty text fixture on the CI runner; focus and occlusion not controlled; no idle-performance pass threshold"
+  },
+  "sdk": {
+    "schema": 1,
+    "provider_revision": "6def54ad2bf2089b57c09337c0b3f82cc1178187",
+    "platform": "macos-arm64",
+    "build_options": {
+      "CMAKE_BUILD_TYPE:STRING": "Release",
+      "GUI_FORMS_ENABLE_HARFBUZZ_TEXT:BOOL": "ON",
+      "GUI_FORMS_ENABLE_LINUX_HOST:BOOL": "OFF",
+      "GUI_FORMS_ENABLE_MACOS_HOST:BOOL": "ON",
+      "GUI_FORMS_ENABLE_SKIA:BOOL": "ON",
+      "GUI_FORMS_ENABLE_WINDOWS_HOST:BOOL": "OFF"
+    },
+    "gui_forms_sha256": "0fff6f5fc36cda6d64b1ff6e6bf049106cb70f16f09c606b1ce4ecd515c28075",
+    "picker_sha256": "d01f81a016d479f962b287f080c6b8db36621eea169f928626834fc963b027fc",
+    "validation": "relocated independent Application and picker configure/link passed",
+    "prepared_text_availability": "not asserted by this packaging receipt"
+  },
+  "executable_sha256": "29473118db750ab380bcbd482f1cfc581a158664397f909bbbd28c4ef8ffd98f"
+}

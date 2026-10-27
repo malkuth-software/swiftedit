@@ -1,0 +1,20 @@
+{
+  "source_revision": "ea3a73c4d3d2eff810c165e864b71d9c00c3b2c3",
+  "provider_revision": "723cd7f9f8016d854f667f41e0c5dbcbe4cc0adf",
+  "platform": "linux-x64",
+  "executable_sha256": "6916c4e3492c7175f95b0a77e453e220b66465099e5f1e976656cbde42fa2e9f",
+  "status": "completed",
+  "trials_per_fixture": 5,
+  "viewport": [
+    80,
+    24
+  ],
+  "repeated_moves_each_direction": 1000,
+  "maximum_moves_per_slice": 16,
+  "scope": "headless shared-loop navigation to screen-string submission; excludes OS input delivery and physical presentation",
+  "clock": "steady_clock wall time; sample-vector insertion excluded",
+  "percentiles": "nearest rank, pooled slices across trials and both directions",
+  "cache_state": "uncontrolled; sequential ASCII, Unicode, control/invalid-byte fixtures",
+  "performance_threshold": "none",
+  "exit_code": 0
+}

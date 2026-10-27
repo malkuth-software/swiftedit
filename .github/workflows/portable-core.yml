@@ -1,0 +1,34 @@
+name: Cross-platform core and file readers
+on:
+  # Optional alternate-compiler diagnostic. Native CI already runs these core
+  # tests; do not compile the same production sources in a second push matrix.
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: portable-core-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  core:
+    name: Core tests on ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-2022, macos-26, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure production core
+        run: cmake -S ci/portable-core -B .build/portable-core -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build .build/portable-core --config Release --parallel 2
+      - name: Test formulas and native file readers
+        run: ctest --test-dir .build/portable-core -C Release --output-on-failure
+      - name: Preserve test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: core-test-results-${{ matrix.runner }}
+          path: .build/portable-core/Testing/Temporary/
+          if-no-files-found: ignore

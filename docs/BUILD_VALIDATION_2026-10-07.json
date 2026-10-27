@@ -1,0 +1,18 @@
+{
+  "revision": "cee0affd7fc6f5e3124fbcec2b6f3be0eb8fd8ec",
+  "provider_revision": "e589142ffc6f5c2aaed46754460031919c44aa2c",
+  "platforms": {
+    "windows-x64": {
+      "archive_sha256": "b177aa174dc7c54bdd4eadb327bcec653326119b85af554a151dff2629ca6f97",
+      "manifest_file_hashes_checked": 52
+    },
+    "linux-x64": {
+      "archive_sha256": "20ed0d65dbe30f6a9e9f3cee37c35e3d2c250bc032829b69be83b85e7f57e3ea",
+      "manifest_file_hashes_checked": 101
+    },
+    "macos-arm64": {
+      "archive_sha256": "a06ce2840cb9c75d50a4aecf47e704a37c839026617c5f0d4f21bdef8958d956",
+      "manifest_file_hashes_checked": 3
+    }
+  }
+}

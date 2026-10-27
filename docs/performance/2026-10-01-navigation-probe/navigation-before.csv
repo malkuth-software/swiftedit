@@ -1,0 +1,11 @@
+fixture,operation,source_bytes,samples,p50_ms,p95_ms,p99_ms,worst_ms
+ascii-1m,public-textstore-replace,1048576,31,41.6391,44.8024,51.5844,51.5844
+ascii-100k,first-row-after-navigation,102400,1,0.2465,0.2465,0.2465,0.2465
+ascii-100k,warm-horizontal-row,102400,101,0.0335,0.0516,0.1347,0.1528
+ascii-100k,insert-and-row,102400,11,4.8498,6.0138,6.0138,6.0138
+ascii-1m,first-row-after-navigation,1048576,1,2.2677,2.2677,2.2677,2.2677
+ascii-1m,warm-horizontal-row,1048576,31,0.0289,0.0435,0.0472,0.0472
+ascii-1m,insert-and-row,1048576,11,47.9070,91.2005,91.2005,91.2005
+mixed,first-row-after-navigation,106496,1,5.2884,5.2884,5.2884,5.2884
+mixed,warm-horizontal-row,106496,101,0.0204,0.0359,0.0529,0.1842
+mixed,insert-and-row,106496,11,8.5452,8.9576,8.9576,8.9576

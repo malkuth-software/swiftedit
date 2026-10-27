@@ -1,0 +1,18 @@
+{
+  "source_revision": "325ede5a2a4e339a658475f45fb86ff68c0a15ca",
+  "provider_revision": "723cd7f9f8016d854f667f41e0c5dbcbe4cc0adf",
+  "platform": "macos-arm64",
+  "executable_sha256": "c4b810d77ccc9d39a3e9e6e98685db4dc97dfe065bb70d2a2f3113bd957f03d5",
+  "status": "completed",
+  "scope": "headless read-only terminal end scan; not native input-to-screen latency",
+  "fixture_bytes": 16777216,
+  "viewport": [
+    80,
+    24
+  ],
+  "trials_per_fixture": 5,
+  "percentiles": "nearest rank; per-step samples pooled across trials",
+  "clock_overhead": "included",
+  "cache_state": "not controlled; trials run sequentially",
+  "performance_threshold": "none"
+}

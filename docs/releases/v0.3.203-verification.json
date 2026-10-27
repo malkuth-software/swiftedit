@@ -1,0 +1,60 @@
+{
+  "revision": "b01f3162d8b969a7d4dbc70caf557c0e96f43510",
+  "provider_revision": "e589142ffc6f5c2aaed46754460031919c44aa2c",
+  "platforms": {
+    "windows-x64": {
+      "archive_sha256": "3d8c12f0928eac08c1367366bf9aa9bc386baf6b4b3f65a5dd0f1ec880c06185",
+      "manifest_file_hashes_checked": 52,
+      "installer": {
+        "filename": "SwiftEdit-0.3.203-windows-x64-setup.exe",
+        "sha256": "dd2b964e378551b58e24d5e314c9b7185deb53d7759218e186496874839cae9d",
+        "version": "0.3.203",
+        "validation": "install, payload hashes, GUI/CLI startup, reinstall and document-preserving uninstall passed"
+      },
+      "native_tests_passed": 39,
+      "compiler_cache": {
+        "cache_miss": 1,
+        "direct_cache_hit": 324,
+        "preprocessed_cache_hit": 7
+      }
+    },
+    "linux-x64": {
+      "archive_sha256": "5154dc1fd3c8ef8936b7d0b39402b82ae9c04ee0a5ff01c11ca82e626ceb121f",
+      "manifest_file_hashes_checked": 101,
+      "installer": {
+        "filename": "SwiftEdit-0.3.203-linux-amd64.deb",
+        "sha256": "ebbce884f54733307b8808de21bfa6773f228143d084c7312de3216ebceb1191",
+        "version": "0.3.203",
+        "validation": "system installation, payload hashes, installed GUI/CLI startup and package removal passed"
+      },
+      "native_tests_passed": 39,
+      "compiler_cache": {
+        "cache_miss": 1,
+        "direct_cache_hit": 442,
+        "preprocessed_cache_hit": 7
+      }
+    },
+    "macos-arm64": {
+      "archive_sha256": "7fc9a7cc47e80e407f7087476b9b5d1b8c757186bc192f7cc497fd0aa1820afb",
+      "manifest_file_hashes_checked": 3,
+      "installer": {
+        "filename": "SwiftEdit-0.3.203-macos-arm64.pkg",
+        "sha256": "72acfdfae9420f6ac8af777114805a85456d40205cf111d65b88360927bfc812",
+        "version": "0.3.203",
+        "validation": "system installation, payload hashes, signature and installed GUI/CLI startup passed"
+      },
+      "native_tests_passed": 40,
+      "compiler_cache": {
+        "cache_miss": 1,
+        "direct_cache_hit": 441,
+        "preprocessed_cache_hit": 14
+      }
+    }
+  },
+  "version": "0.3.203",
+  "release_url": "https://github.com/falseywinchnet/swiftedit/releases/tag/v0.3.203",
+  "ci_run_url": "https://github.com/falseywinchnet/swiftedit/actions/runs/37739753849",
+  "local_headless_tests_passed": 31,
+  "publication_contract_tests_passed": 9,
+  "cache_admission_tests_passed": 5
+}

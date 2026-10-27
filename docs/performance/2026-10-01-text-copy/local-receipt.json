@@ -1,0 +1,21 @@
+{
+  "base_commit": "3b4a6b9",
+  "benchmark_source": "uncommitted at measurement, included with this receipt",
+  "platform": "Windows local x64",
+  "trials_per_fixture": 3,
+  "source_bytes": 16777216,
+  "step_bytes": 65536,
+  "wall_clock": "std::chrono::steady_clock",
+  "cpu_clock": "GetProcessTimes; coarse process accounting, zeros not evidence of zero CPU",
+  "cpu_unmeasured": "empty fields for preparation/cancellation",
+  "ordering": "ASCII then Unicode then invalid; 3 successive trials each; whole-output validation after each publication; cache and background load uncontrolled",
+  "scope": "headless SessionTextCopy, not GUI or terminal physical input latency; no idle CPU conclusion; no memory peak measurement",
+  "samples": 2331,
+  "sha256": {
+    "tests/text_copy_bench.cpp": "e8001dac32cb7bdc5c846b14db77b763d7769423c63233115aa26b0c59375a83",
+    "src/session_text_copy.cpp": "808733d4b05ba76f2e606fc258b860a652f500f669b15afb70c78e0a3cd5cc99",
+    "src/text_copy_stream.cpp": "30330defedaf62e9a27a718d600da7785fe7d3dc5d38c5b309f1e5a4f317c3ba",
+    "src/file_windows.cpp": "8f5c7003912c6876f58daa772ffa059cf39520f179774685683d12b73d20c488",
+    ".build/swiftedit-sdk-723cd7f/swiftedit-text-copy-bench.exe": "19f7d38fb16685bc2ce74a3b5e464d23e6052b1435ce5b1e15d383a9dcfcf7df"
+  }
+}

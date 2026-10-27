@@ -1,0 +1,1 @@
+source_bytes=876543 samples=31 setup_source_ms=7.0058 setup_layout_ms=2.7493 setup_total_ms=9.8588 p50_ms=1.4234 p95_ms=1.7554 p99_ms=1.9971 worst_ms=1.9971

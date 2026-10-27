@@ -1,0 +1,11 @@
+{
+  "repository": "falseywinchnet/gui_forms",
+  "revision": "4e126d6eb3ab837f1a44c0e9c9eb7901d50f80bb",
+  "picker_repository": "falseywinchnet/file_manager",
+  "picker_revision": "964261f33031db3cec48fd4cacd84f78f3843548",
+  "cache_sha256": {
+    "windows-x64": "a26cd3227f114041a60249c0525c9c5d87b0282ce3adb25f9fbedb964ff5c6ca",
+    "linux-x64": "6bbd6d665af3ab356b01d5dabe05d6dc466f741a493e7bd133be7ff24c4e1a81",
+    "macos-arm64": "c0746a7f10dec9342979d769630b02b4e31bb70280e1fc931699423f5e7444fe"
+  }
+}

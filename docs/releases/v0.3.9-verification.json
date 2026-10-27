@@ -1,0 +1,21 @@
+{
+  "revision": "2e88b381e36948c08d5d6723a9db575e79e3cad2",
+  "provider_revision": "6f5c854e61612fadf38c35c18d06c447c5e49e4d",
+  "platforms": {
+    "windows-x64": {
+      "archive_sha256": "3e91ab67ca137538b61f29bb4922f4a4bc1aa8f13469f895a14fb1ccd08e7599",
+      "manifest_file_hashes_checked": 44
+    },
+    "linux-x64": {
+      "archive_sha256": "6783b481a404fb226d117036f99c5e17b09e9ee7acc00f286ab15dbcceb20d2f",
+      "manifest_file_hashes_checked": 98
+    },
+    "macos-arm64": {
+      "archive_sha256": "202c611771835def0e4399e8db36b6f994321f9bb7a6a47ba9dfd97fe8827a72",
+      "manifest_file_hashes_checked": 3
+    }
+  },
+  "release_url": "https://github.com/falseywinchnet/swiftedit/releases/tag/v0.3.9",
+  "release_run": 37188094396,
+  "github_asset_digests_checked": 9
+}

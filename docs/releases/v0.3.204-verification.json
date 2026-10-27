@@ -1,0 +1,57 @@
+{
+  "revision": "d217ffd3b5c2e88a78cdb47e22b6070f375de154",
+  "provider_revision": "4e126d6eb3ab837f1a44c0e9c9eb7901d50f80bb",
+  "platforms": {
+    "windows-x64": {
+      "archive_sha256": "cb79debcc0a8ce4d1ed637288e6ac0f8beddd966fd8d3e50bdf8820c259a1686",
+      "manifest_file_hashes_checked": 54,
+      "installer": {
+        "filename": "SwiftEdit-0.3.204-windows-x64-setup.exe",
+        "sha256": "4472d9d8b55d83c7d965f689124e682bfd039d065038759328392d3c4f3db96a",
+        "version": "0.3.204",
+        "validation": "install, payload hashes, GUI/CLI startup, reinstall and document-preserving uninstall passed"
+      },
+      "native_tests_passed": 39,
+      "compiler_cache": {
+        "cache_miss": 20,
+        "direct_cache_hit": 189,
+        "preprocessed_cache_hit": 134
+      }
+    },
+    "linux-x64": {
+      "archive_sha256": "a4545b2d5875adea3d2c0b5313b0fa3c202444bfcb8f6cd04b4bee53f9ac33d2",
+      "manifest_file_hashes_checked": 105,
+      "installer": {
+        "filename": "SwiftEdit-0.3.204-linux-amd64.deb",
+        "sha256": "2ee5d66b60882bdc9b398cf72e747878da729d620f75824a89c982b0de99858b",
+        "version": "0.3.204",
+        "validation": "system installation, payload hashes, installed GUI/CLI startup and package removal passed"
+      },
+      "native_tests_passed": 39,
+      "compiler_cache": {
+        "cache_miss": 20,
+        "direct_cache_hit": 892,
+        "preprocessed_cache_hit": 119
+      }
+    },
+    "macos-arm64": {
+      "archive_sha256": "1213db2c6f2bc5176a00510c32b4c8993ee7d23adff3be484a8863f0381530c3",
+      "manifest_file_hashes_checked": 3,
+      "installer": {
+        "filename": "SwiftEdit-0.3.204-macos-arm64.pkg",
+        "sha256": "a0f1896e435d41a1f91a0b074fbba8900a8e531669bfbc406e25129916827384",
+        "version": "0.3.204",
+        "validation": "system installation, payload hashes, signature and installed GUI/CLI startup passed"
+      },
+      "native_tests_passed": 40,
+      "compiler_cache": {
+        "cache_miss": 20,
+        "direct_cache_hit": 860,
+        "preprocessed_cache_hit": 123
+      }
+    }
+  },
+  "release": "https://github.com/falseywinchnet/swiftedit/releases/tag/v0.3.204",
+  "run": "https://github.com/falseywinchnet/swiftedit/actions/runs/37757049631",
+  "macos_visual_review": "Both document scrollbars visible in native-visual-editor-document-scrollbars-10548/view.png; screenshot inspected."
+}

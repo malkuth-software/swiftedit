@@ -1,0 +1,34 @@
+{
+  "product": "SwiftEdit",
+  "source_revision": "700157e71997aa39aac4f61eced27113f40e7774",
+  "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64",
+  "signature": "ad-hoc; not Developer ID signed or notarized",
+  "packaged_startup": "remained running for five seconds on a disposable text fixture",
+  "idle_cpu_observation": {
+    "warmup_seconds": 5,
+    "elapsed_seconds": 10.022325375000008,
+    "process_cpu_seconds": 0.08999999999999997,
+    "percent_of_one_core": 0.8979951920589077,
+    "scope": "ten quiet seconds with an empty text fixture on the CI runner; focus and occlusion not controlled; no idle-performance pass threshold",
+    "stack_sample": "captured: idle-stack.txt; five seconds at one millisecond intervals"
+  },
+  "sdk": {
+    "schema": 1,
+    "provider_revision": "032237152148ff76ca125eb382f43d589d3baeb9",
+    "platform": "macos-arm64",
+    "build_options": {
+      "CMAKE_BUILD_TYPE:STRING": "Release",
+      "GUI_FORMS_ENABLE_HARFBUZZ_TEXT:BOOL": "ON",
+      "GUI_FORMS_ENABLE_LINUX_HOST:BOOL": "OFF",
+      "GUI_FORMS_ENABLE_MACOS_HOST:BOOL": "ON",
+      "GUI_FORMS_ENABLE_SKIA:BOOL": "ON",
+      "GUI_FORMS_ENABLE_WINDOWS_HOST:BOOL": "OFF"
+    },
+    "gui_forms_sha256": "9a8c7e9520699e6fdce67ec8fecd9758186274ed5ac26609e751c2f4a05d9deb",
+    "picker_sha256": "906b34e2e50f05118f9cf4c40c96dafd553e7ec4ba4c69311fca012c620ad39a",
+    "validation": "relocated independent Application and picker configure/link passed",
+    "prepared_text_availability": "not asserted by this packaging receipt"
+  },
+  "executable_sha256": "a440ad89e0c1e6380279c651f679d64e16991e1a88cfd1b2223c3c71b97c8c64"
+}

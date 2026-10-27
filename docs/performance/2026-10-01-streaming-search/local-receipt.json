@@ -1,0 +1,10 @@
+{
+  "runtime_source": "c2569a3d5fac23a2d936b20821e65dc4a60df1c4",
+  "harness_sha256": "a15317197eeb46a33a06202e8028f843cc888169e5a2580c1c2391f13a141e05",
+  "executable_sha256": "f7bbdab2a4b56ef81f02e6f7dd8f093f4c54e0ecb9ca3b3b63d7b64c8a3f2c70",
+  "raw_csv_sha256": "7dfc43a62b6376c78edd3ed431d4298a18842f7a1a40bfc3008b73a003dd3e83",
+  "samples": 258174,
+  "groups": 90,
+  "scope": "local Windows headless search; uncontrolled cache/background load",
+  "provider_revision": "723cd7f9f8016d854f667f41e0c5dbcbe4cc0adf"
+}

@@ -1,0 +1,136 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-x64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/.build/native-windows-x64/app",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk;${sourceDir}/.build/native-windows-x64/sdk/picker-sdk",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
+        "NOTEPAD_NATIVE_TESTS": "OFF"
+      },
+      "environment": {
+        "CCACHE_DIR": "${sourceDir}/.ccache",
+        "CCACHE_BASEDIR": "${sourceDir}",
+        "CCACHE_COMPILERCHECK": "content",
+        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk/share/GUIForms/fonts",
+        "PATH": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk/bin;$penv{PATH}"
+      }
+    },
+    {
+      "name": "linux-x64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/.build/native-linux-x64/app",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-linux-x64/sdk/gui-forms-sdk;${sourceDir}/.build/native-linux-x64/sdk/picker-sdk",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
+        "NOTEPAD_NATIVE_TESTS": "OFF"
+      },
+      "environment": {
+        "CCACHE_DIR": "${sourceDir}/.ccache",
+        "CCACHE_BASEDIR": "${sourceDir}",
+        "CCACHE_COMPILERCHECK": "content",
+        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-linux-x64/sdk/gui-forms-sdk/share/GUIForms/fonts"
+      }
+    },
+    {
+      "name": "macos-arm64",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/.build/native-macos-arm64/app",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-macos-arm64/sdk/gui-forms-sdk;${sourceDir}/.build/native-macos-arm64/sdk/picker-sdk",
+        "CMAKE_C_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
+        "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
+        "NOTEPAD_NATIVE_TESTS": "OFF"
+      },
+      "environment": {
+        "CCACHE_DIR": "${sourceDir}/.ccache",
+        "CCACHE_BASEDIR": "${sourceDir}",
+        "CCACHE_COMPILERCHECK": "content",
+        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-macos-arm64/sdk/gui-forms-sdk/share/GUIForms/fonts",
+        "GUI_FORMS_LLVM_RUNTIME": "${sourceDir}/.build/toolchain/llvm-22.1.8-macos14"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-x64",
+      "configurePreset": "windows-x64",
+      "jobs": 2
+    },
+    {
+      "name": "linux-x64",
+      "configurePreset": "linux-x64",
+      "jobs": 2
+    },
+    {
+      "name": "macos-arm64",
+      "configurePreset": "macos-arm64",
+      "jobs": 2
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows-x64",
+      "configurePreset": "windows-x64",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 60
+      }
+    },
+    {
+      "name": "linux-x64",
+      "configurePreset": "linux-x64",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 60
+      }
+    },
+    {
+      "name": "macos-arm64",
+      "configurePreset": "macos-arm64",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "timeout": 60
+      }
+    }
+  ]
+}

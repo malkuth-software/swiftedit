@@ -1,0 +1,10 @@
+fixture,operation,source_bytes,samples,p50_ms,p95_ms,p99_ms,worst_ms
+ascii-100k,first-row-after-navigation,102400,1,10.9787,10.9787,10.9787,10.9787
+ascii-100k,warm-horizontal-row,102400,101,11.1316,12.9134,14.1676,15.4876
+ascii-100k,insert-and-row,102400,11,15.9148,48.0629,48.0629,48.0629
+ascii-1m,first-row-after-navigation,1048576,1,145.4808,145.4808,145.4808,145.4808
+ascii-1m,warm-horizontal-row,1048576,31,127.2604,139.9425,144.4180,144.4180
+ascii-1m,insert-and-row,1048576,11,171.5926,176.6674,176.6674,176.6674
+mixed,first-row-after-navigation,106496,1,6.0567,6.0567,6.0567,6.0567
+mixed,warm-horizontal-row,106496,101,6.0060,6.1830,6.3844,7.1972
+mixed,insert-and-row,106496,11,9.3496,9.6729,9.6729,9.6729

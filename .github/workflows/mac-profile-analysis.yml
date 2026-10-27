@@ -1,0 +1,25 @@
+name: Export recorded Mac CPU samples
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  export:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the existing provider recording
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 36963650387 --repo falseywinchnet/file_manager --name mac-cpu-profile-36963650387 --dir .build/profile-input
+      - name: Export focused samples and signposts
+        run: python3 -B tools/Export-Mac-Profile.py --input .build/profile-input --output .build/profile-export
+      - name: Preserve export diagnostics and samples
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-cpu-samples-${{ github.run_id }}
+          path: .build/profile-export
+          if-no-files-found: warn

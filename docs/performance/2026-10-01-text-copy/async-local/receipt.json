@@ -1,0 +1,18 @@
+{
+  "base_commit": "533302c",
+  "source": "uncommitted async implementation included with this receipt",
+  "platform": "Windows local x64",
+  "trials_per_fixture": 3,
+  "source_bytes": 16777216,
+  "step_bytes": 65536,
+  "samples": 2349,
+  "method": "Same fixture order and validation as baseline. Publication total includes dispatch/waits/completion. Dispatch and completion wall times measured separately. Worker never accesses Session or UI. Benchmark waits on completion in 8 ms intervals. Cache/background load uncontrolled; not paired causal comparison.",
+  "scope": "headless component timings, not physical key latency or GUI idle CPU",
+  "sha256": {
+    "tests/text_copy_bench.cpp": "cb2879f784e0de1f2495a626256f1a7353ede28ee7104b5c8e7341bfeaace66c",
+    "src/session_text_copy.cpp": "01987180cb1ed5daa6e1b4399afde2a0edbd389e791d50549591732f59d75bdf",
+    "src/session_text_copy.hpp": "dd597441aa2381a57bdeb31ae2282eee099efe4aed3be22db7d2ae33f60a90f9",
+    "src/terminal_app.hpp": "84aaf5c5ee095dcc2190f0e2cd303a06fbb2c5467f06eac3a45eb229586354d0",
+    ".build/swiftedit-sdk-723cd7f/swiftedit-text-copy-bench.exe": "8e9dd111456059b7c4b7ac1ad6bc4e1f7819fe8c14dd57f98ab5a6c29f69d2ff"
+  }
+}

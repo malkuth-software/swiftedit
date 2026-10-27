@@ -1,0 +1,7 @@
+Source base: 4ff4d4b; measured changes identified by Git blob SHA1 below.
+5507dc2b448c0b46ea55add4c519029033ee6bce  CMakeLists.txt
+3c22c7f2f91e449b75475c195d41f76fb47a1b41  src/terminal_row.cpp
+30430231c2e5a9f6bb169d07990f7a6122fa5813  src/terminal_row.hpp
+6a2d08a2fbf5ec410ed31792a6fd34f3ac3d2135  src/terminal_windows.cpp
+dc3c36a88419f09ef88c044b9aeb039c273cfed8  tests/terminal_bench.cpp
+39a6e7c4b7752cb2d8de015c3d71cdb6cc034a8c  tests/terminal_row_tests.cpp

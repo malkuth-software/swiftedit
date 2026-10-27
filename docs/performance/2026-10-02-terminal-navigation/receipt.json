@@ -1,0 +1,13 @@
+{
+  "source_base": "9993eb59035b1063578961e80e2adafc6f5a196b",
+  "implementation": "970cd73",
+  "benchmark_source_sha256": "4198FD05E3FA74CA3438E5B6E65B16524E544FCF1B6A46C1D171881B9E931425",
+  "executable_sha256": "8B277CF89900F687F987FFD8E57B9C2CCC02A9E5744F8857E3215B171EC9985B",
+  "platform": "Windows x64",
+  "provider": "723cd7f9f8016d854f667f41e0c5dbcbe4cc0adf",
+  "status": "completed",
+  "scope": "headless shared-loop navigation batch wall time; not physical input latency or idle CPU",
+  "local_samples_sha256": "4BC54F12F3136A2FC3E40FCED7E41760137641498C5947025F9530CB5D1E09AD",
+  "repository_samples_sha256": "d9d2e9f51fbeded53036d0f0733d16272bffcc52b91d205661de31d13d46ba13",
+  "sample_line_endings": "Local Windows CSV uses CRLF; repository CSV is normalized to LF. Both hashes are recorded."
+}

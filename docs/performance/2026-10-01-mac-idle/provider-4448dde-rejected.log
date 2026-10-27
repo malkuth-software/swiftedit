@@ -1,0 +1,2 @@
+cost-experiment-rejected: cadence exceeded declared lateness bound
+cost-experiment=static-unfocused-provider-surrogate|order=ABBA|intervals=4x10s|cadence_ms=530|tick_validation_overhead=included

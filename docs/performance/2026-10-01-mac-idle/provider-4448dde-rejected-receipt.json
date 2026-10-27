@@ -1,0 +1,14 @@
+{
+  "source_revision": "4448ddeacd1420d5357a9d8323ac6b4b3b29485e",
+  "command": [
+    "/Users/runner/work/file_manager/file_manager/.build/native-macos-arm64/gui-forms/gui_forms_macos_idle_visibility_tests",
+    "--paint-cost-experiment"
+  ],
+  "status": "rejected",
+  "exit_code": 1,
+  "wall_seconds": 10.749817833000066,
+  "process_timeout_seconds": 90,
+  "accepted_marker": false,
+  "detail": "",
+  "limits": "Static unfocused surrogate; not consumer idle CPU or pixel-equivalence proof"
+}

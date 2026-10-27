@@ -1,0 +1,15 @@
+ascii-16m,step,samples=1285,p50=3.626900,p95=3.929900,p99=4.124600,worst=6.046500
+ascii-16m,publish-frame,samples=5,p50=0.634000,p95=0.791300,p99=0.791300,worst=0.791300
+ascii-16m,release,samples=5,p50=0.105300,p95=0.113800,p99=0.113800,worst=0.113800
+ascii-16m,cancel-release,samples=5,p50=0.160500,p95=0.213800,p99=0.213800,worst=0.213800
+ascii-16m,total,samples=5,p50=929.161100,p95=989.257400,p99=989.257400,worst=989.257400
+controls-16m,step,samples=1285,p50=3.863600,p95=4.000700,p99=4.381500,worst=6.148500
+controls-16m,publish-frame,samples=5,p50=0.229800,p95=0.270800,p99=0.270800,worst=0.270800
+controls-16m,release,samples=5,p50=0.038800,p95=0.040000,p99=0.040000,worst=0.040000
+controls-16m,cancel-release,samples=5,p50=0.094800,p95=0.263300,p99=0.263300,worst=0.263300
+controls-16m,total,samples=5,p50=991.907800,p95=999.483600,p99=999.483600,worst=999.483600
+mixed-16m,step,samples=1285,p50=2.092600,p95=2.232300,p99=2.453000,worst=2.703000
+mixed-16m,publish-frame,samples=5,p50=0.213000,p95=0.239000,p99=0.239000,worst=0.239000
+mixed-16m,release,samples=5,p50=0.040200,p95=0.042600,p99=0.042600,worst=0.042600
+mixed-16m,cancel-release,samples=5,p50=0.056900,p95=0.248600,p99=0.248600,worst=0.248600
+mixed-16m,total,samples=5,p50=540.862500,p95=544.105600,p99=544.105600,worst=544.105600

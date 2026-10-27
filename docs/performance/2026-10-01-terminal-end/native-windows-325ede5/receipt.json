@@ -1,0 +1,18 @@
+{
+  "source_revision": "325ede5a2a4e339a658475f45fb86ff68c0a15ca",
+  "provider_revision": "723cd7f9f8016d854f667f41e0c5dbcbe4cc0adf",
+  "platform": "windows-x64",
+  "executable_sha256": "de3a081b85bbff292a3b5178b3360745edcb19f76f8107506853ad63b8ce684a",
+  "status": "completed",
+  "scope": "headless read-only terminal end scan; not native input-to-screen latency",
+  "fixture_bytes": 16777216,
+  "viewport": [
+    80,
+    24
+  ],
+  "trials_per_fixture": 5,
+  "percentiles": "nearest rank; per-step samples pooled across trials",
+  "clock_overhead": "included",
+  "cache_state": "not controlled; trials run sequentially",
+  "performance_threshold": "none"
+}

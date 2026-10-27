@@ -1,0 +1,14 @@
+{
+  "source_revision": "275a1334ef5ca4a3d0ec35d025b52fac7187eb54",
+  "command": [
+    "/Users/runner/work/file_manager/file_manager/.build/native-macos-arm64/gui-forms/gui_forms_macos_idle_visibility_tests",
+    "--paint-cost-experiment"
+  ],
+  "status": "rejected",
+  "exit_code": 1,
+  "wall_seconds": 18.171126749999985,
+  "process_timeout_seconds": 90,
+  "accepted_marker": false,
+  "detail": "cost-experiment-rejected: cadence exceeded declared lateness bound",
+  "limits": "Static unfocused surrogate; not consumer idle CPU or pixel-equivalence proof"
+}
