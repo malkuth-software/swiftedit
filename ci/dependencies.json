@@ -1,14 +1,12 @@
 {
   "repository": "malkuth-software/gui_forms",
-  "revision": "4e126d6eb3ab837f1a44c0e9c9eb7901d50f80bb",
-  "picker_repository": "falseywinchnet/file_manager",
-  "picker_revision": "964261f33031db3cec48fd4cacd84f78f3843548",
-  "stx_rtf2md_repository": "malkuth-software/gui_forms",
-  "stx_rtf2md_revision": "1794ab59dc64591e30eb13ee2d303353ad61eb82",
-  "pin_note": "Two pins of malkuth-software/gui_forms (formerly falseywinchnet/gui_forms). revision is the GUI.Forms SDK, held where the File Manager picker accepts GUIForms 0.1. stx_rtf2md_revision builds only the standalone stx_rtf2md package, which has no GUI.Forms dependency, at the later revision that contains it. Fold the two into one when the SDK pin moves.",
+  "revision": "e077f9d5a5117312e65e8c3b741c4edd24013d56",
+  "picker_repository": "malkuth-software/file_manager",
+  "picker_revision": "028a3f969709cac88611369b81653889391fe21a",
+  "pin_note": "revision is GUI.Forms v0.2.1308 (malkuth-software/gui_forms main e077f9d5). SwiftEdit builds its SDK, the standalone stx_rtf2md package and, with File Manager 028a3f96, the document picker from that one checkout. cache_sha256 are the digests of its build-<revision> compiler-cache assets. Its tools forward to template_harness at the commit gui_forms/harness.lock pins, which prepare_dependencies.py checks out at template_harness/.",
   "cache_sha256": {
-    "windows-x64": "a26cd3227f114041a60249c0525c9c5d87b0282ce3adb25f9fbedb964ff5c6ca",
-    "linux-x64": "6bbd6d665af3ab356b01d5dabe05d6dc466f741a493e7bd133be7ff24c4e1a81",
-    "macos-arm64": "c0746a7f10dec9342979d769630b02b4e31bb70280e1fc931699423f5e7444fe"
+    "windows-x64": "af328c744efec15f2c9ae5e5294dce7f1e8357c37e6a4882dadbf30ef754a4a7",
+    "linux-x64": "53546e08de59d6d33fc294f2d927aeea56e0d991ab30099601c453931af33094",
+    "macos-arm64": "fa2aad3c1fe492b5ab0550c3f075b2616cf7270bc3699175be4e93b9b527f63c"
   }
 }

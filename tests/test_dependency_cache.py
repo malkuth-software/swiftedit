@@ -15,7 +15,7 @@ from prepare_dependencies import import_cache
 class CacheAdmission(unittest.TestCase):
     def fixture(self, root: Path, entry: str = '.ccache/object', revision: str = 'reviewed') -> tuple[Path, str]:
         archive: Path = root / 'cache.tar.gz'
-        manifest: bytes = json.dumps({'repository': 'falseywinchnet/gui_forms',
+        manifest: bytes = json.dumps({'repository': 'malkuth-software/gui_forms',
             'revision': revision, 'platform': 'windows-x64'}).encode()
         with tarfile.open(archive, 'w:gz') as bundle:
             name: str
@@ -31,7 +31,7 @@ class CacheAdmission(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root: Path = Path(temporary)
             archive, digest = self.fixture(root)
-            import_cache(archive, root / 'out', digest, 'reviewed', 'windows-x64')
+            import_cache(archive, root / 'out', digest, 'malkuth-software/gui_forms', 'reviewed', 'windows-x64')
             self.assertEqual((root / 'out/.ccache/object').read_bytes(), b'object')
 
     def test_digest_rejected_before_write(self) -> None:
@@ -39,7 +39,7 @@ class CacheAdmission(unittest.TestCase):
             root: Path = Path(temporary)
             archive, digest = self.fixture(root)
             with self.assertRaises(ValueError):
-                import_cache(archive, root / 'out', '0' * 64, 'reviewed', 'windows-x64')
+                import_cache(archive, root / 'out', '0' * 64, 'malkuth-software/gui_forms', 'reviewed', 'windows-x64')
             self.assertFalse((root / 'out').exists())
 
     def test_identity_rejected_before_write(self) -> None:
@@ -47,7 +47,15 @@ class CacheAdmission(unittest.TestCase):
             root: Path = Path(temporary)
             archive, digest = self.fixture(root, revision='other')
             with self.assertRaises(ValueError):
-                import_cache(archive, root / 'out', digest, 'reviewed', 'windows-x64')
+                import_cache(archive, root / 'out', digest, 'malkuth-software/gui_forms', 'reviewed', 'windows-x64')
+            self.assertFalse((root / 'out').exists())
+
+    def test_other_repository_rejected_before_write(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root: Path = Path(temporary)
+            archive, digest = self.fixture(root)
+            with self.assertRaises(ValueError):
+                import_cache(archive, root / 'out', digest, 'falseywinchnet/gui_forms', 'reviewed', 'windows-x64')
             self.assertFalse((root / 'out').exists())
 
     def test_traversal_rejected_before_write(self) -> None:
@@ -55,7 +63,7 @@ class CacheAdmission(unittest.TestCase):
             root: Path = Path(temporary)
             archive, digest = self.fixture(root, entry='.ccache/../../escaped')
             with self.assertRaises(ValueError):
-                import_cache(archive, root / 'out', digest, 'reviewed', 'windows-x64')
+                import_cache(archive, root / 'out', digest, 'malkuth-software/gui_forms', 'reviewed', 'windows-x64')
             self.assertFalse((root / 'out').exists())
             self.assertFalse((root / 'escaped').exists())
 
@@ -64,7 +72,7 @@ class CacheAdmission(unittest.TestCase):
             root: Path = Path(temporary)
             archive, digest = self.fixture(root, entry='.ccache/../src/consumer.cpp')
             with self.assertRaises(ValueError):
-                import_cache(archive, root / 'out', digest, 'reviewed', 'windows-x64')
+                import_cache(archive, root / 'out', digest, 'malkuth-software/gui_forms', 'reviewed', 'windows-x64')
             self.assertFalse((root / 'out').exists())
 
 

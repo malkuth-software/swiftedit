@@ -10,9 +10,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
 find_package(Threads REQUIRED)
-find_package(GUIForms 0.1 CONFIG REQUIRED COMPONENTS Application)
-# The standalone RTF/markdown package, pinned apart from the GUI.Forms SDK
-# (pin_note in ci/dependencies.json).
+find_package(GUIForms 0.2 CONFIG REQUIRED COMPONENTS Application)
+# The standalone RTF/markdown package, built from the pinned GUI.Forms
+# checkout beside the SDK (pin_note in ci/dependencies.json).
 find_package(stx_rtf2md 0.1 CONFIG REQUIRED)
 add_library(swiftedit_md4c STATIC third_party/md4c/md4c.c third_party/md4c/entity.c)
 target_include_directories(swiftedit_md4c PUBLIC third_party/md4c)

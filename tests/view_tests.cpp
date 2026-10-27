@@ -293,6 +293,47 @@ void verify_cached_conversion() {
         (*grid).set_source("4,=A1/8,=A1/8");
     }
 }
+struct RaisedCount {
+    std::size_t *count{};
+    void operator()() const { ++*count; }
+};
+// Keys typed into csv.entry through the window, as a user would. Enter must
+// store the cell through committed(); Escape must raise cancelled(), which
+// abandons a pending conversion. The grid's own Enter only refocuses the
+// entry, so a box that passed Enter on would store nothing.
+void verify_entry_keys() {
+    const std::shared_ptr<notepad::CsvView> grid =
+        gf::make_control<notepad::CsvView>(gf::StableId("entry.csv"));
+    gf::Window window(grid, {800, 600});
+    window.perform_layout();
+    std::string output{};
+    const gf::SubscriptionToken subscription = (*grid).changed().subscribe(ConvertedSource{&output});
+    (*grid).set_source("1,2");
+    settle_formulas(*grid);
+    (*grid).select_cell({0, 1});
+    const std::shared_ptr<gf::TextBox> entry =
+        std::dynamic_pointer_cast<gf::TextBox>(window.find("csv.entry"));
+    check(static_cast<bool>(entry), "Entry fixture has a cell entry");
+    std::size_t cancellations = 0;
+    const gf::SubscriptionToken cancelled = (*entry).cancelled().subscribe(RaisedCount{&cancellations});
+    window.request_focus(entry);
+    (*entry).set_text("7");
+    const bool entered = window.dispatch_key({gf::KeyAction::down, gf::PhysicalKey::enter});
+    check(entered && output == "1,7", "Enter in the cell entry stores the cell");
+    output.clear();
+    window.request_focus(entry);
+    // Fresh source, so the formula has no cached result and the conversion
+    // waits for the worker; requested while the entry already has focus, so
+    // no focus change cancels it.
+    (*grid).set_source("8,=A1/8");
+    (*grid).select_cell({0, 1});
+    (*grid).convert_to_value();
+    check(output.empty(), "Pending conversion returns before worker adoption");
+    const bool escaped = window.dispatch_key({gf::KeyAction::down, gf::PhysicalKey::escape});
+    settle_formulas(*grid);
+    check(escaped && cancellations == 1, "Escape in the cell entry raises its cancellation");
+    check(output.empty(), "Escape in the cell entry abandons the pending conversion");
+}
 void verify_cooperative_formulas() {
     const std::shared_ptr<notepad::CsvView> grid =
         gf::make_control<notepad::CsvView>(gf::StableId("cooperative.csv"));
@@ -639,6 +680,7 @@ int main() {
         verify_duplicate_formulas();
         verify_cooperative_formulas();
         verify_cached_conversion();
+        verify_entry_keys();
         verify_markdown_preparation();
         verify_tall_markdown_visibility();
         const std::shared_ptr<notepad::CsvView> grid =

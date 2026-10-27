@@ -51,7 +51,7 @@ def main() -> None:
     dependencies: dict = json.loads(Path('ci/dependencies.json').read_text())
     if (manifest['provider_revision'] != dependencies['revision']
             or manifest['picker_revision'] != dependencies['picker_revision']
-            or manifest.get('stx_rtf2md_revision') != dependencies['stx_rtf2md_revision']
+            or manifest.get('stx_rtf2md_revision') != dependencies['revision']
             or manifest['platform'] != arguments.platform):
         raise RuntimeError('Installed packages differ from the dependency lock')
     lock: dict = {'provider_revision': dependencies['revision']}
