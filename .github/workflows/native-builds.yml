@@ -190,6 +190,10 @@ jobs:
           path: .build/native-${{ matrix.platform }}/app/dist/*
           if-no-files-found: error
           compression-level: 0
+      # SwiftEdit's own code under AddressSanitizer and UndefinedBehaviorSanitizer
+      # (LeakSanitizer too on Linux and macOS), headless tests only, never packaged.
+      - name: Test SwiftEdit under the sanitizers
+        run: python -B tools/Build-Native.py --platform ${{ matrix.platform }} --sanitize --jobs 4
       - name: Preserve native test and package diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -198,6 +202,7 @@ jobs:
           path: |
             .build/compiler-cache.txt
             .build/native-${{ matrix.platform }}/app/Testing/Temporary/
+            .build/native-${{ matrix.platform }}/app-sanitize/Testing/Temporary/
             .build/native-${{ matrix.platform }}/app/mac-package-*/startup.log
             .build/native-${{ matrix.platform }}/app/mac-package-*/idle-stack*.txt
             .build/native-${{ matrix.platform }}/app/native-visual-*/*.png

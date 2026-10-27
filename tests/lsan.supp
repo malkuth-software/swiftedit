@@ -1,0 +1,3 @@
+# LeakSanitizer suppressions for SwiftEdit's sanitized tests
+# (tools/Build-Native.py --sanitize). Each entry names the leak, why it is
+# not SwiftEdit's defect, and where it is tracked. Empty: no leak is accepted.

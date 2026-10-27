@@ -34,6 +34,47 @@ def sha256(path: Path) -> str:
     return result
 
 
+# The sanitized configuration, matching GUI.Forms' sanitizer trees
+# (template_harness ci_build_steps.py): AddressSanitizer and
+# UndefinedBehaviorSanitizer on SwiftEdit's own code, every report fatal,
+# line tables only. The installed GUI.Forms, picker and stx_rtf2md packages
+# are not instrumented; their code runs unchecked but their allocations are
+# still tracked. LeakSanitizer runs where AddressSanitizer carries it (Linux
+# and macOS; the MinGW runtime on Windows has none), with SwiftEdit's
+# suppressions in tests/lsan.supp.
+SANITIZER_FLAGS: str = ('-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer '
+                        '-fdebug-compilation-dir=.')
+SANITIZER_LINK_FLAGS: str = '-fsanitize=address,undefined'
+SANITIZER_BUILD_TYPE_FLAGS: str = '-O2 -gline-tables-only -DNDEBUG'
+
+
+def sanitizer_configuration(platform: str) -> list[str]:
+    """CMake options for the sanitized tree; sets the sanitizer runtime options in this process's environment."""
+    detect_leaks: str = '0' if platform == 'windows-x64' else '1'
+    os.environ['ASAN_OPTIONS'] = 'detect_leaks=' + detect_leaks + ':halt_on_error=1:abort_on_error=0:print_summary=1'
+    os.environ['UBSAN_OPTIONS'] = 'print_stacktrace=1:halt_on_error=1:print_summary=1'
+    if detect_leaks == '1':
+        os.environ['LSAN_OPTIONS'] = ('suppressions=' + str(Path('tests/lsan.supp').resolve())
+                                      + ':print_suppressions=0')
+    options: list[str] = ['-DCMAKE_BUILD_TYPE=RelWithDebInfo',
+                          '-DCMAKE_C_FLAGS_RELWITHDEBINFO=' + SANITIZER_BUILD_TYPE_FLAGS,
+                          '-DCMAKE_CXX_FLAGS_RELWITHDEBINFO=' + SANITIZER_BUILD_TYPE_FLAGS]
+    if platform == 'macos-arm64':
+        # llvm22.cmake keeps the pinned libc++ flags in CMAKE_<LANG>_FLAGS_INIT,
+        # which a command-line CMAKE_<LANG>_FLAGS would replace; the
+        # environment joins them instead, at a tree's first configure.
+        options.append('-DCMAKE_OBJCXX_FLAGS_RELWITHDEBINFO=' + SANITIZER_BUILD_TYPE_FLAGS)
+        os.environ['CFLAGS'] = SANITIZER_FLAGS
+        os.environ['CXXFLAGS'] = SANITIZER_FLAGS
+        os.environ['OBJCXXFLAGS'] = SANITIZER_FLAGS
+        os.environ['LDFLAGS'] = SANITIZER_LINK_FLAGS
+    else:
+        options.extend(['-DCMAKE_C_FLAGS=' + SANITIZER_FLAGS, '-DCMAKE_CXX_FLAGS=' + SANITIZER_FLAGS,
+                        '-DCMAKE_EXE_LINKER_FLAGS=' + SANITIZER_LINK_FLAGS,
+                        '-DCMAKE_SHARED_LINKER_FLAGS=' + SANITIZER_LINK_FLAGS])
+    return options
+
+
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--platform', choices=['macos-arm64', 'windows-x64', 'linux-x64'], required=True)
@@ -42,14 +83,19 @@ def main() -> None:
     phase: argparse._MutuallyExclusiveGroup = parser.add_mutually_exclusive_group()
     phase.add_argument('--build-only', action='store_true')
     phase.add_argument('--test-package-only', action='store_true')
+    parser.add_argument('--sanitize', action='store_true',
+                        help='build and test SwiftEdit under AddressSanitizer and UndefinedBehaviorSanitizer')
     arguments: argparse.Namespace = parser.parse_args()
     if arguments.jobs < 1:
         parser.error('--jobs must be positive')
+    if arguments.sanitize and (arguments.installers or arguments.test_package_only):
+        parser.error('a sanitized build is tested, never packaged')
     # SWIFTEDIT_LOCKSTEP (local builds only; tools/prepare_dependencies.py)
     # builds against the machine's lockstep GUI.Forms in trees of its own. It
     # turns the native window tests off and never packages.
     lockstep: bool = bool(os.environ.get('SWIFTEDIT_LOCKSTEP', ''))
-    build: Path = Path('.build/native-' + arguments.platform + ('/app-lockstep' if lockstep else '/app')).resolve()
+    tree: str = ('app-lockstep' if lockstep else 'app') + ('-sanitize' if arguments.sanitize else '')
+    build: Path = Path('.build/native-' + arguments.platform + '/' + tree).resolve()
     sdk: Path = build.parent / ('sdk-lockstep' if lockstep else 'sdk')
     manifest: dict = json.loads((sdk / 'manifest.json').read_text(encoding='utf-8'))
     dependencies: dict = json.loads(Path('ci/dependencies.json').read_text())
@@ -86,10 +132,14 @@ def main() -> None:
     os.environ['PATH'] = str(gui / 'bin') + os.pathsep + os.environ['PATH']
     os.environ['CCACHE_BASEDIR'] = str(Path('.').resolve())
     os.environ['CCACHE_COMPILERCHECK'] = 'content'
+    native_tests: bool = not lockstep and not arguments.sanitize
+    configuration: list[str] = ['-DCMAKE_BUILD_TYPE=Release']
+    if arguments.sanitize:
+        configuration = sanitizer_configuration(arguments.platform)
     if not arguments.test_package_only:
-        run(['cmake', '-S', '.', '-B', str(build), '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
+        run(['cmake', '-S', '.', '-B', str(build), '-G', 'Ninja'] + configuration + [
              '-DSWIFTEDIT_RELEASE_VERSION=' + project_version(),
-             '-DCMAKE_PREFIX_PATH=' + prefix, '-DNOTEPAD_NATIVE_TESTS=' + ('OFF' if lockstep else 'ON'),
+             '-DCMAKE_PREFIX_PATH=' + prefix, '-DNOTEPAD_NATIVE_TESTS=' + ('ON' if native_tests else 'OFF'),
              '-DCMAKE_TOOLCHAIN_FILE=' + str(toolchain),
              '-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
              '-DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache'])
@@ -97,6 +147,9 @@ def main() -> None:
     if arguments.build_only:
         return
     run(['ctest', '--test-dir', str(build), '--output-on-failure', '--timeout', '60'])
+    if arguments.sanitize:
+        print('Sanitized build tested. Evidence and packages come only from the release build.', flush=True)
+        return
     if lockstep:
         print('Lockstep build tested. Evidence and packages come only from pinned builds.', flush=True)
         return

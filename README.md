@@ -98,6 +98,13 @@ The `cli` test runs `tests/cli_tests.ps1` with the first of `pwsh` or
 `powershell` on PATH. Windows PowerShell's default execution policy refuses
 the script, so put PowerShell 7 (`pwsh`) on PATH for local runs, as CI does.
 
+`tools/Build-Native.py --platform <platform> --sanitize` builds SwiftEdit's own
+code with AddressSanitizer and UndefinedBehaviorSanitizer (LeakSanitizer too on
+Linux and macOS, with `tests/lsan.supp`) in `app-sanitize` (or
+`app-lockstep-sanitize`) and runs the headless tests; every report fails the
+run. Each native CI job runs it after packaging. The installed GUI.Forms,
+picker and stx_rtf2md packages are not instrumented.
+
 `cmake --build --preset windows-x64 --target swiftedit-app` builds the GUI,
 terminal and CLI. `swiftedit-check` builds the test executables and runs CTest.
 `swiftedit-package` creates the platform archive and performs packaged startup
