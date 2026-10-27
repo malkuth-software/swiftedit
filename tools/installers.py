@@ -203,6 +203,10 @@ def macos(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
     return installer, 'system installation, payload hashes, signature and installed GUI/CLI startup passed'
 
 
+# Debian's architecture name for each Linux platform (dpkg --print-architecture).
+DEBIAN_ARCHITECTURES: dict[str, str] = {'linux-x64': 'amd64', 'linux-arm64': 'arm64'}
+
+
 def debian_control(version: str, architecture: str, dependencies: str) -> str:
     """The installed package's DEBIAN/control, naming the vendor as maintainer."""
     result: str = ('Package: ' + DEBIAN_PACKAGE + '\nVersion: ' + version + '\nArchitecture: ' + architecture + '\n'
@@ -212,9 +216,10 @@ def debian_control(version: str, architecture: str, dependencies: str) -> str:
     return result
 
 
-def linux(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
+def linux(bundle: Path, output: Path, scratch: Path, platform: str) -> tuple[Path, str]:
     version: str = project_version()
-    installer: Path = output / ('SwiftEdit-' + version + '-linux-amd64.deb')
+    architecture: str = DEBIAN_ARCHITECTURES[platform]
+    installer: Path = output / ('SwiftEdit-' + version + '-linux-' + architecture + '.deb')
     root: Path = scratch / 'deb-root'
     installed: Path = root / 'usr/lib/swiftedit'
     shutil.copytree(bundle, installed)
@@ -235,7 +240,7 @@ def linux(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
     metadata.parent.mkdir()
     metadata.write_text('Source: ' + DEBIAN_PACKAGE + '\nSection: editors\nPriority: optional\n'
         'Maintainer: ' + DEBIAN_MAINTAINER + '\n\n'
-        'Package: ' + DEBIAN_PACKAGE + '\nArchitecture: amd64\nDescription: SwiftEdit native text editor\n',
+        'Package: ' + DEBIAN_PACKAGE + '\nArchitecture: ' + architecture + '\nDescription: SwiftEdit native text editor\n',
         encoding='utf-8')
     arguments: list[str] = ['dpkg-shlibdeps', '-O', '-l' + str(installed / 'lib'), '--ignore-missing-info']
     binary: Path
@@ -251,7 +256,7 @@ def linux(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
         raise RuntimeError('Could not determine Debian runtime dependencies')
     control: Path = root / 'DEBIAN/control'
     control.parent.mkdir()
-    control.write_text(debian_control(version, 'amd64', dependencies), encoding='utf-8')
+    control.write_text(debian_control(version, architecture, dependencies), encoding='utf-8')
     run(['dpkg-deb', '--root-owner-group', '--build', str(root), str(installer)])
     if Path('/usr/lib/swiftedit').exists():
         raise RuntimeError('Refusing to replace a pre-existing application during CI installation test')
@@ -275,8 +280,8 @@ def build_and_verify(bundle: Path, output: Path, platform: str) -> dict[str, str
             installer, validation = windows(bundle, output, scratch)
         elif platform == 'macos-arm64':
             installer, validation = macos(bundle, output, scratch)
-        elif platform == 'linux-x64':
-            installer, validation = linux(bundle, output, scratch)
+        elif platform in DEBIAN_ARCHITECTURES:
+            installer, validation = linux(bundle, output, scratch, platform)
         else:
             raise ValueError('Unsupported installer platform')
     checksum: str = sha256(installer)

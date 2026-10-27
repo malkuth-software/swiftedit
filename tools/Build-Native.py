@@ -77,7 +77,7 @@ def sanitizer_configuration(platform: str) -> list[str]:
 
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--platform', choices=['macos-arm64', 'windows-x64', 'linux-x64'], required=True)
+    parser.add_argument('--platform', choices=['macos-arm64', 'windows-x64', 'linux-x64', 'linux-arm64'], required=True)
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--installers', action='store_true')
     phase: argparse._MutuallyExclusiveGroup = parser.add_mutually_exclusive_group()

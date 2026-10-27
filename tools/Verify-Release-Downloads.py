@@ -29,8 +29,8 @@ def main() -> None:
             raise ValueError('Expected a full lowercase source commit SHA')
     report: dict[str, object] = {'revision': revision, 'provider_revision': provider, 'platforms': {}}
     platform: str
-    for platform in ['windows-x64', 'linux-x64', 'macos-arm64']:
-        suffix: str = '.tar.gz' if platform == 'linux-x64' else '.zip'
+    for platform in ['windows-x64', 'linux-x64', 'linux-arm64', 'macos-arm64']:
+        suffix: str = '.tar.gz' if platform.startswith('linux-') else '.zip'
         archive: Path = root / ('SwiftEdit-' + platform + '-' + revision[:12] + suffix)
         with archive.open('rb') as stream:
             digest: str = hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -49,7 +49,7 @@ def main() -> None:
         checked: int = 0
         name: str
         expected: str
-        if platform == 'linux-x64':
+        if platform.startswith('linux-'):
             with tarfile.open(archive, 'r:gz') as bundle:
                 for name, expected in manifest['files'].items():
                     with bundle.extractfile('SwiftEdit/' + name) as stream:

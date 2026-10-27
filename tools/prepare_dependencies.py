@@ -173,7 +173,7 @@ def prepare_lockstep(record: dict, lock: dict, platform: str, jobs: str) -> None
 
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--platform', choices=['windows-x64', 'linux-x64', 'macos-arm64'], required=True)
+    parser.add_argument('--platform', choices=['windows-x64', 'linux-x64', 'linux-arm64', 'macos-arm64'], required=True)
     parser.add_argument('--jobs', type=int, default=2)
     parser.add_argument('--restore-cache', action='store_true')
     parser.add_argument('--fetch-only', action='store_true')
@@ -239,15 +239,17 @@ def main() -> None:
         run(['sh', str(gui / 'third_party/fetch_text_stack.sh')])
         options.extend(['-DGUI_FORMS_ENABLE_SKIA=OFF', '-DGUI_FORMS_ENABLE_HARFBUZZ_TEXT=ON'])
     else:
-        if arguments.platform == 'linux-x64':
+        linux: bool = arguments.platform.startswith('linux-')
+        if linux:
             os.environ['GUI_FORMS_SYSTEM_BUILD_TOOLS'] = '1'
         run(['sh', str(gui / 'third_party/fetch_skia_cpu.sh')])
         run(['sh', str(gui / 'third_party/fetch_text_stack.sh')])
         skia: Path = build / 'skia'
-        script: str = 'build_skia_cpu_linux.sh' if arguments.platform == 'linux-x64' else 'build_skia_cpu.sh'
+        # The Linux script builds for the host's architecture (x64 or arm64).
+        script: str = 'build_skia_cpu_linux.sh' if linux else 'build_skia_cpu.sh'
         run(['sh', str(gui / 'third_party' / script), str(skia)])
         options.extend(['-DGUI_FORMS_SKIA_PREBUILT=ON', '-DGUI_FORMS_SKIA_OUT=' + str(skia)])
-        if arguments.platform == 'linux-x64':
+        if linux:
             options.append('-DGUI_FORMS_ENABLE_LINUX_HOST=ON')
     # The text engine's pinned UAX #14 line breaking (libunibreak), required
     # wherever HarfBuzz text is on, which is now every platform.

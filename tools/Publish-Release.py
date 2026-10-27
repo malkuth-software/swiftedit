@@ -53,7 +53,7 @@ def main() -> None:
     staging.mkdir(exist_ok=True)
     files: list[str] = []
     platform: str
-    for platform in ['windows-x64', 'macos-arm64', 'linux-x64']:
+    for platform in ['windows-x64', 'macos-arm64', 'linux-x64', 'linux-arm64']:
         source: Path = arguments.artifacts / ('SwiftEdit-' + platform)
         item: Path
         for item in checked_files(source, platform, revision, version, dependencies, arguments.installers):
@@ -75,10 +75,10 @@ def main() -> None:
         changes_path = Path('packaging/RELEASE_NOTES.md')
     changes: str = changes_path.read_text(encoding='utf-8') if changes_path.is_file() else ''
     notes.write_text('SwiftEdit ' + tag + ' for Windows, macOS and Linux, from commit `' + revision + '`.\n\n'
-        + changes + '\n\nAll three native build/test jobs and package startup checks passed before publication.\n\n'
+        + changes + '\n\nAll four native build/test jobs and package startup checks passed before publication.\n\n'
         '- **Windows:** x64 per-user setup executable, with Start menu shortcut and uninstall entry; portable ZIP also available. Unsigned.\n'
         '- **macOS:** Apple silicon `.pkg` installs SwiftEdit.app into Applications; portable ZIP also available. Built on macOS 15 using the GUI.Forms macOS 14 runtime contract. Ad-hoc signed app; installer unsigned and not notarized.\n'
-        '- **Linux:** Ubuntu 24.04-compatible amd64 `.deb`, with desktop launcher and terminal commands; portable x64 tarball also available. X11 session required.\n\n'
+        '- **Linux:** Ubuntu 24.04-compatible amd64 and arm64 `.deb` packages, with desktop launcher and terminal commands; portable x64 and arm64 tarballs also available. X11 session required.\n\n'
         'Archives and installers include the GUI, terminal editor, CLI, runtime libraries, fonts and license notices. '
         'SHA-256 sidecars and exact source/dependency manifests accompany the downloads.\n', encoding='utf-8')
     existing: dict | None = probe(['api', 'repos/' + repository + '/releases/tags/' + tag])

@@ -12,7 +12,7 @@ def digest(path: Path) -> str:
 
 def checked_files(source: Path, platform: str, revision: str, version: str,
                   dependencies: dict, installers: bool) -> list[Path]:
-    suffix: str = '.tar.gz' if platform == 'linux-x64' else '.zip'
+    suffix: str = '.tar.gz' if platform.startswith('linux-') else '.zip'
     archive: Path = source / ('SwiftEdit-' + platform + '-' + revision[:12] + suffix)
     manifest_path: Path = source / ('manifest.json' if platform == 'macos-arm64' else platform + '-manifest.json')
     manifest: dict = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -25,7 +25,8 @@ def checked_files(source: Path, platform: str, revision: str, version: str,
     binaries: list[Path] = [archive]
     if installers:
         suffixes: dict[str, str] = {'windows-x64': '-windows-x64-setup.exe',
-            'macos-arm64': '-macos-arm64.pkg', 'linux-x64': '-linux-amd64.deb'}
+            'macos-arm64': '-macos-arm64.pkg', 'linux-x64': '-linux-amd64.deb',
+            'linux-arm64': '-linux-arm64.deb'}
         name: str = 'SwiftEdit-' + version + suffixes[platform]
         receipt: dict = manifest.get('installer', {})
         installer: Path = source / name
