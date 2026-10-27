@@ -202,7 +202,7 @@ if(NOTEPAD_BUILD_UI)
   if(APPLE)
     add_executable(notepad MACOSX_BUNDLE src/main.cpp)
     set_target_properties(notepad PROPERTIES
-      MACOSX_BUNDLE_GUI_IDENTIFIER org.malkuth.swiftedit
+      MACOSX_BUNDLE_GUI_IDENTIFIER com.malkuthsoft.swiftedit
       MACOSX_BUNDLE_BUNDLE_NAME SwiftEdit
       MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
       MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION})
