@@ -90,10 +90,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TOOLCHAIN_PYTHON: ${{ steps.toolchain-python.outputs.python-path }}
-        # The harness GUI.Forms pins reads the toolchain from GITHUB_REPOSITORY's
-        # releases. The runner keeps its own GITHUB_* values over a step's env,
-        # so GUI.Forms' repository is named on the command itself.
-        run: GITHUB_REPOSITORY=malkuth-software/gui_forms "$TOOLCHAIN_PYTHON" gui_forms/tools/windows_toolchain.py restore
+        # The harness reads the toolchain from its project file's [toolchain]
+        # repository: GUI.Forms' own releases.
+        run: '"$TOOLCHAIN_PYTHON" gui_forms/tools/windows_toolchain.py restore'
       - name: Install macOS LLVM 22
         if: runner.os == 'macOS'
         run: |

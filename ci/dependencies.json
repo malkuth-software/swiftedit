@@ -1,12 +1,13 @@
 {
   "repository": "malkuth-software/gui_forms",
-  "revision": "e077f9d5a5117312e65e8c3b741c4edd24013d56",
+  "revision": "8e28866639687cf218cff20154920a79b0fe924f",
   "picker_repository": "malkuth-software/file_manager",
   "picker_revision": "028a3f969709cac88611369b81653889391fe21a",
-  "pin_note": "revision is GUI.Forms v0.2.1308 (malkuth-software/gui_forms main e077f9d5). SwiftEdit builds its SDK, the standalone stx_rtf2md package and, with File Manager 028a3f96, the document picker from that one checkout. cache_sha256 are the digests of its build-<revision> compiler-cache assets. Its tools forward to template_harness at the commit gui_forms/harness.lock pins, which prepare_dependencies.py checks out at template_harness/.",
+  "pin_note": "revision is malkuth-software/gui_forms main 8e288666, the first commit carrying harness.lock 523c2a7 (after #413) and the machine lockstep commit. SwiftEdit builds its SDK, the standalone stx_rtf2md package and, with File Manager 028a3f96, the document picker from that one checkout. cache_sha256 are the digests of its build-<revision> compiler-cache assets. Its tools forward to template_harness, which prepare_dependencies.py checks out at template_harness/ at the commit harness.lock pins; that pin must equal gui_forms/harness.lock.",
   "cache_sha256": {
-    "windows-x64": "af328c744efec15f2c9ae5e5294dce7f1e8357c37e6a4882dadbf30ef754a4a7",
-    "linux-x64": "53546e08de59d6d33fc294f2d927aeea56e0d991ab30099601c453931af33094",
-    "macos-arm64": "fa2aad3c1fe492b5ab0550c3f075b2616cf7270bc3699175be4e93b9b527f63c"
+    "windows-x64": "8daf6985595b87c2a987d951a6287cd6308491be80c1899d092e67e6156d434c",
+    "linux-x64": "0ce5913dbe0f56668ae92f9f5956c78094596774643c3c27e467be4192717dfa",
+    "macos-arm64": "f9d434aeb86aaae639461c2e47f65bb2872f991cb40d6366510c2a7eb4a8079a",
+    "linux-arm64": "0d25024a45b697a4934f06110b6ccafbcce65fab256a9b765bf49a468e51d518"
   }
 }
