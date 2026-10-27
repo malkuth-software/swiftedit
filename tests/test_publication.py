@@ -103,7 +103,7 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('CurrentVersion\\Uninstall\\SwiftEdit"', script)
         control: str = debian_control('0.4.1', 'amd64', 'libc6')
         self.assertIn('Package: malkuth-swiftedit\n', control)
-        self.assertIn('Maintainer: Malkuth Software <noreply@malkuthsoft.invalid>\n', control)
+        self.assertIn('Maintainer: Malkuth Software <maintainer@malkuthsoft.com>\n', control)
         field: str
         for field in ['Replaces', 'Conflicts', 'Provides']:
             self.assertIn(field + ': swiftedit\n', control)

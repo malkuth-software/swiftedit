@@ -19,7 +19,7 @@ DEBIAN_PACKAGE: str = 'malkuth-swiftedit'
 # The Debian package's earlier name: the new package replaces it, so apt
 # removes it and takes over its files in one installation.
 DEBIAN_EARLIER_PACKAGE: str = 'swiftedit'
-DEBIAN_MAINTAINER: str = 'Malkuth Software <noreply@malkuthsoft.invalid>'
+DEBIAN_MAINTAINER: str = 'Malkuth Software <maintainer@malkuthsoft.com>'
 
 
 def run(arguments: list[str], cwd: Path | None = None) -> str:
