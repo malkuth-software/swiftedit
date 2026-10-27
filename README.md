@@ -13,6 +13,7 @@ platform. These are public downloads; GitHub sign-in is not required.
 | Apple silicon, macOS 14+ (CI tests macOS 15) | `SwiftEdit-*-macos-arm64.pkg` | Installs `SwiftEdit.app` into Applications |
 | Windows x64 | `SwiftEdit-*-windows-x64-setup.exe` | Per-user installation, Start menu shortcut and uninstall entry |
 | Linux x64, Ubuntu 24.04-compatible runtime, X11 | `SwiftEdit-*-linux-amd64.deb` | Install with `sudo apt install ./SwiftEdit-*-linux-amd64.deb`; launch from the desktop menu or `swiftedit` |
+| Linux arm64, Ubuntu 24.04-compatible runtime, X11 | `SwiftEdit-*-linux-arm64.deb` | Install with `sudo apt install ./SwiftEdit-*-linux-arm64.deb`; launch from the desktop menu or `swiftedit` |
 
 Portable ZIPs and Linux tarballs remain available. Extract the entire archive
 before launching the application. Releases through v0.3.10 contain portable archives only.
@@ -23,7 +24,7 @@ editor is included on all three platforms. Builds after v0.3.0 also include the
 command-session CLI on Mac at `SwiftEdit.app/Contents/MacOS/swiftedit-cli`;
 v0.3.0 includes the CLI on Windows and Linux only.
 
-Native CI builds and tests Windows x64, macOS ARM64 and Linux x64 on code pushes.
+Native CI builds and tests Windows x64, macOS ARM64, Linux x64 and Linux arm64 on code pushes.
 It builds matching public packages from the standalone source revisions in
 `ci/dependencies.json`, importing verified provider compiler caches. After all three native jobs and packaged startup checks
 and installer checks pass, master pushes automatically publish one immutable
@@ -79,7 +80,7 @@ cmake --build --preset windows-x64
 ctest --preset windows-x64
 ```
 
-Use `linux-x64` or `macos-arm64` for the other hosts. Preparation checks out the
+Use `linux-x64`, `linux-arm64` or `macos-arm64` for the other hosts. Preparation checks out the
 pinned providers, authenticates the published GUI.Forms cache, and builds the
 public installed GUI.Forms and picker packages with the same toolchain.
 Cache misses compile from pinned source. Integrity failures stop the import.

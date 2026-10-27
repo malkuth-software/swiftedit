@@ -107,7 +107,7 @@ def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', type=Path, required=True)
     parser.add_argument('--sdk', type=Path, required=True)
-    parser.add_argument('--platform', choices=['windows-x64', 'linux-x64'], required=True)
+    parser.add_argument('--platform', choices=['windows-x64', 'linux-x64', 'linux-arm64'], required=True)
     parser.add_argument('--headless-only', action='store_true')
     parser.add_argument('--installer', action='store_true')
     arguments: argparse.Namespace = parser.parse_args()
