@@ -94,6 +94,9 @@ tests SwiftEdit in `.build/native-<platform>/app-lockstep`, without native
 window tests and without packaging; packages come only from pinned builds.
 `harness.lock` pins template_harness and must equal the GUI.Forms pin's
 `gui_forms/harness.lock`.
+The `cli` test runs `tests/cli_tests.ps1` with the first of `pwsh` or
+`powershell` on PATH. Windows PowerShell's default execution policy refuses
+the script, so put PowerShell 7 (`pwsh`) on PATH for local runs, as CI does.
 
 `cmake --build --preset windows-x64 --target swiftedit-app` builds the GUI,
 terminal and CLI. `swiftedit-check` builds the test executables and runs CTest.
