@@ -51,6 +51,7 @@ def main() -> None:
     dependencies: dict = json.loads(Path('ci/dependencies.json').read_text())
     if (manifest['provider_revision'] != dependencies['revision']
             or manifest['picker_revision'] != dependencies['picker_revision']
+            or manifest.get('stx_rtf2md_revision') != dependencies['revision']
             or manifest['platform'] != arguments.platform):
         raise RuntimeError('Installed packages differ from the dependency lock')
     lock: dict = {'provider_revision': dependencies['revision']}
@@ -62,7 +63,7 @@ def main() -> None:
     os.environ['CCACHE_COMPILERCHECK'] = 'content'
     if arguments.platform == 'macos-arm64':
         os.environ['GUI_FORMS_LLVM_RUNTIME'] = str(Path('.build/toolchain/llvm-22.1.8-macos14').resolve())
-    prefix: str = str(gui) + ';' + str(sdk / 'picker-sdk')
+    prefix: str = str(gui) + ';' + str(sdk / 'picker-sdk') + ';' + str(sdk / 'stx-rtf2md-sdk')
     if not arguments.test_package_only:
         run(['cmake', '-S', '.', '-B', str(build), '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
              '-DSWIFTEDIT_RELEASE_VERSION=' + project_version(),

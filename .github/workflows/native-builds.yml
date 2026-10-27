@@ -4,8 +4,8 @@ on:
     branches: [master]
     tags: ['v*']
     paths-ignore: ['docs/**', '*.md']
+  # Every pull request runs, so "SwiftEdit checks" always reports for branch protection.
   pull_request:
-    paths-ignore: ['docs/**', '*.md']
   workflow_dispatch:
     inputs:
       publish:
@@ -63,18 +63,37 @@ jobs:
       CMAKE_OBJCXX_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v4
-      - uses: msys2/setup-msys2@v2
+      # Windows builds with GUI.Forms' published CLANG64 toolchain (LLVM
+      # 22.1.8, with the same packages SwiftEdit installed before); the MSYS2
+      # mirrors carry only the current LLVM. Restoring it needs Python 3.14
+      # (stdlib zstd) and the pinned GUI.Forms tools, so on Windows the
+      # providers are fetched first, from bash, before any msys2 step.
+      - uses: actions/setup-python@v5
+        id: toolchain-python
         if: runner.os == 'Windows'
         with:
-          msystem: CLANG64
-          update: true
-          path-type: inherit
-          install: >-
-            mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-lld
-            mingw-w64-clang-x86_64-llvm-tools mingw-w64-clang-x86_64-cmake
-            mingw-w64-clang-x86_64-ninja mingw-w64-clang-x86_64-python
-            mingw-w64-clang-x86_64-ccache mingw-w64-clang-x86_64-winpthreads
-            mingw-w64-clang-x86_64-nsis git
+          python-version: '3.14'
+          update-environment: false
+      - name: Fetch pinned providers and import verified GUI.Forms cache on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOOLCHAIN_PYTHON: ${{ steps.toolchain-python.outputs.python-path }}
+        run: |
+          # The MSYS2 git that builds later must see the checkouts' LF files as clean.
+          git config --global core.autocrlf false
+          "$TOOLCHAIN_PYTHON" -B tools/prepare_dependencies.py --platform windows-x64 --restore-cache --fetch-only
+      - name: Restore GUI.Forms' published Windows toolchain
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TOOLCHAIN_PYTHON: ${{ steps.toolchain-python.outputs.python-path }}
+        # The harness GUI.Forms pins reads the toolchain from GITHUB_REPOSITORY's
+        # releases. The runner keeps its own GITHUB_* values over a step's env,
+        # so GUI.Forms' repository is named on the command itself.
+        run: GITHUB_REPOSITORY=malkuth-software/gui_forms "$TOOLCHAIN_PYTHON" gui_forms/tools/windows_toolchain.py restore
       - name: Install macOS LLVM 22
         if: runner.os == 'macOS'
         run: |
@@ -88,11 +107,12 @@ jobs:
           sudo install -m 0644 "$RUNNER_TEMP/llvm-key.asc" /usr/share/keyrings/apt-llvm.asc
           echo 'deb [signed-by=/usr/share/keyrings/apt-llvm.asc] https://apt.llvm.org/noble/ llvm-toolchain-noble-22 main' | sudo tee /etc/apt/sources.list.d/llvm-22.list
           sudo apt-get update
-          sudo apt-get install -y clang-22 cmake ninja-build generate-ninja ccache pkg-config libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libatk1.0-dev libatk-bridge2.0-dev xvfb xauth patchelf dpkg-dev
+          sudo apt-get install -y clang-22 cmake ninja-build generate-ninja ccache pkg-config libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libatk1.0-dev libatk-bridge2.0-dev xvfb xauth patchelf dpkg-dev
           echo /usr/lib/llvm-22/bin >> "$GITHUB_PATH"
       - name: Test dependency cache admission
         run: python -B -m unittest discover -s tests -p test_dependency_cache.py
       - name: Fetch pinned providers and import verified GUI.Forms cache
+        if: runner.os != 'Windows'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python -B tools/prepare_dependencies.py --platform ${{ matrix.platform }} --restore-cache --fetch-only
@@ -190,6 +210,23 @@ jobs:
             .build/native-${{ matrix.platform }}/app/navigation-evidence/receipt.json
             .build/native-${{ matrix.platform }}/app/navigation-evidence/fixtures/samples.csv
           if-no-files-found: ignore
+
+  # The one check branch protection requires: it always reports, and passes
+  # only when the preparation and every native build, test and package job did.
+  summary:
+    name: SwiftEdit checks
+    needs: [prepare, native]
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require the preparation and every native job to pass
+        env:
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          NATIVE_RESULT: ${{ needs.native.result }}
+        run: |
+          echo "prepare: $PREPARE_RESULT; native: $NATIVE_RESULT"
+          test "$PREPARE_RESULT" = success
+          test "$NATIVE_RESULT" = success
 
   release:
     name: Publish validated cross-platform release

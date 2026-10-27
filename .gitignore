@@ -5,3 +5,5 @@ work/
 gui_forms/
 .ccache/
 __pycache__/
+/template_harness/
+/.ci/

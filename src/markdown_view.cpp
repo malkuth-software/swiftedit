@@ -1,5 +1,6 @@
 #include "markdown_view.hpp"
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
 #include <map>
@@ -47,10 +48,33 @@ struct MarkdownView::LayoutWork {
     std::size_t retained_bytes{}, block_index{}, span_index{}, offset{};
     double y{page_margin}, maximum_x{}, width{};
     bool block_started{};
+    // The first run of the line being laid out, for alignment.
+    std::size_t line_first{};
     std::vector<double> x{}, row_y{}, line_height{};
 };
 MarkdownView::~MarkdownView() = default;
 MarkdownView::MarkdownView(gf::StableId id) : Control(std::move(id)) { set_focusable(true); }
+void MarkdownView::align_line(std::vector<Run> &next, std::size_t first, double left, double right, double end,
+                              swiftedit::MarkdownAlignment alignment) {
+    if (alignment == swiftedit::MarkdownAlignment::left || first >= next.size())
+        return;
+    const double room = std::max(0.0, right - std::max(left, end));
+    const double offset = alignment == swiftedit::MarkdownAlignment::center ? room / 2 : room;
+    for (std::size_t index = first; index < next.size(); ++index)
+        next[index].bounds.x += offset;
+}
+double MarkdownView::align_baselines(std::vector<Run> &next, std::size_t first, double top) {
+    double shared = 0;
+    for (std::size_t index = first; index < next.size(); ++index)
+        shared = std::max(shared, next[index].baseline - next[index].script_shift);
+    double height = 0;
+    for (std::size_t index = first; index < next.size(); ++index) {
+        Run &run = next[index];
+        run.bounds.y += shared - (run.baseline - run.script_shift);
+        height = std::max(height, run.bounds.y + run.bounds.height - top);
+    }
+    return height;
+}
 bool MarkdownView::RunOrder::operator()(const Run &left, const Run &right) const {
     const bool before = left.bounds.y < right.bounds.y;
     return before;
@@ -266,6 +290,7 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
             line_height.assign(columns, 20);
             for (std::size_t column = 0; column < columns; ++column)
                 x[column] = start + static_cast<double>(column) * column_width + (table ? 6 : 0);
+            work.line_first = next.size();
             work.block_started = true;
         }
         for (; work.span_index < block.spans.size(); ++work.span_index) {
@@ -286,6 +311,17 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
             }
             if (block.kind == swiftedit::MarkdownKind::heading)
                 font.size = 30 - static_cast<double>(std::min<std::size_t>(block.level, 6)) * 2;
+            // Dialect size steps -2 to +4 scale the body size as 16 to 64
+            // half-points scale 24; super- and subscripts shrink and move.
+            constexpr std::array<double, 7> step_scales{16.0 / 24, 20.0 / 24, 1, 28.0 / 24, 36.0 / 24,
+                                                        48.0 / 24, 64.0 / 24};
+            const std::size_t step = static_cast<std::size_t>(std::clamp(span.size_step, -2, 4) + 2);
+            font.size *= step_scales[step];
+            double shift = 0;
+            if (span.superscript || span.subscript) {
+                shift = span.superscript ? -font.size * 0.35 : font.size * 0.2;
+                font.size *= 0.7;
+            }
             const std::string &safe = span.text;
             std::size_t &offset = work.offset;
             for (; offset < safe.size();) {
@@ -293,6 +329,12 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
                     return;
                 ++steps;
                 if (safe[offset] == '\n' || safe[offset] == '\r') {
+                    if (!table) {
+                        align_line(next, work.line_first, left, right, x[column], block.alignment);
+                        line_height[column] = std::max(line_height[column],
+                                                       align_baselines(next, work.line_first, row_y[column]));
+                    }
+                    work.line_first = next.size();
                     x[column] = left;
                     row_y[column] += line_height[column];
                     line_height[column] = std::max(20.0, font.size * 1.5);
@@ -320,6 +362,12 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
                     metrics.ascent + metrics.descent) + 4);
                 if (block.kind != swiftedit::MarkdownKind::code && x[column] > left &&
                     x[column] + measured.width > right) {
+                    if (!table) {
+                        align_line(next, work.line_first, left, right, x[column], block.alignment);
+                        line_height[column] = std::max(line_height[column],
+                                                       align_baselines(next, work.line_first, row_y[column]));
+                    }
+                    work.line_first = next.size();
                     x[column] = left;
                     row_y[column] += line_height[column];
                     line_height[column] = height;
@@ -328,13 +376,20 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
                 Run run{};
                 run.bounds = {x[column], row_y[column], measured.width, height};
                 run.font = font;
-                run.baseline = 2 + metrics.ascent;
+                run.baseline = 2 + metrics.ascent + shift;
+                run.script_shift = shift;
                 run.underline = run.baseline + std::max(1.0, metrics.descent * 0.5);
                 run.strike_y = run.baseline - metrics.ascent * 0.35;
                 run.text = word;
                 run.url = span.url;
                 run.strike = span.strike;
                 run.code = span.code || block.kind == swiftedit::MarkdownKind::code;
+                run.underlined = span.underline;
+                if (span.colour)
+                    run.colour = gf::Color::rgba((*span.colour).red, (*span.colour).green, (*span.colour).blue);
+                if (span.background)
+                    run.background = gf::Color::rgba((*span.background).red, (*span.background).green,
+                                                     (*span.background).blue);
                 next.push_back(std::move(run));
                 retained_bytes = text_total;
                 x[column] += measured.width;
@@ -342,6 +397,11 @@ void MarkdownView::layout(gf::TextMetricsProvider &painter, double width) {
                 offset = end;
             }
             work.offset = 0;
+        }
+        if (!table) {
+            if (block.kind != swiftedit::MarkdownKind::code)
+                align_line(next, work.line_first, start, start + column_width, x[0], block.alignment);
+            line_height[0] = std::max(line_height[0], align_baselines(next, work.line_first, row_y[0]));
         }
         double bottom = y + 20;
         for (std::size_t column = 0; column < columns; ++column)
@@ -466,15 +526,24 @@ void MarkdownView::on_paint(gf::Painter &painter, gf::Rect) {
             painter.fill_rect(item.bounds, style.border);
             continue;
         }
-        if (item.code)
+        if (item.background)
+            painter.fill_rect(item.bounds, *item.background);
+        else if (item.code)
             painter.fill_rect(item.bounds, style.face_light);
-        const gf::Color color = item.url.empty() ? style.text : style.link;
+        gf::Color color = item.url.empty() ? style.text : style.link;
+        if (item.colour && item.url.empty())
+            color = *item.colour;
         // Space-only runs still own geometry, code backgrounds and link/strike
         // decorations. They have no visible glyph ink to submit to the host.
         if (item.text.find_first_not_of(' ') != std::string::npos)
             painter.draw_text_utf8({item.bounds.x, item.bounds.y + item.baseline}, item.text, item.font, color);
-        if (item.strike || !item.url.empty()) {
-            const double baseline = item.bounds.y + (item.strike ? item.strike_y : item.underline);
+        if (item.strike) {
+            const double baseline = item.bounds.y + item.strike_y;
+            painter.draw_line({item.bounds.x, baseline},
+                              {item.bounds.x + item.bounds.width, baseline}, color, 1);
+        }
+        if (item.underlined || !item.url.empty()) {
+            const double baseline = item.bounds.y + item.underline;
             painter.draw_line({item.bounds.x, baseline},
                               {item.bounds.x + item.bounds.width, baseline}, color, 1);
         }

@@ -2,6 +2,7 @@
 #include "session.hpp"
 #include "characters.hpp"
 #include "date_time.hpp"
+#include "rtf_import.hpp"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -21,6 +22,7 @@ Editor::~Editor() {
 }
 void Editor::on_dispose() noexcept {
     cancel_search();
+    import_summary_frame_.disconnect();
     pending_save_.reset();
     conflict_review_.reset();
     after_save_ = Continuation::none;
@@ -84,6 +86,13 @@ void Editor::PostedClose::operator()() const {
     const std::shared_ptr<Editor> self = lock_alive(owner);
     if (self)
         static_cast<void>((*self).handle_.request_close());
+}
+void Editor::ImportSummaryTick::operator()(gf::FrameTime) const {
+    const std::shared_ptr<Editor> self = lock_alive(owner);
+    if (!self)
+        return;
+    (*self).import_summary_frame_.disconnect();
+    (*self).show_import_summary();
 }
 void Editor::continue_operation(Continuation next) {
     switch (next) {
@@ -480,6 +489,13 @@ void Editor::open_file(const std::filesystem::path &source) {
     if (pending_save_ || conflict_review_)
         throw std::runtime_error(
             "Finish or cancel the pending save before opening another document.");
+    if (has_rtf_extension(path_utf8(source.filename()))) {
+        const FileSnapshot snapshot = read_file(source);
+        if (looks_like_rtf(snapshot.bytes)) {
+            import_rtf_file(snapshot.bytes);
+            return;
+        }
+    }
     Document next{};
     next.open(source);
     const gf::TextBox::MultilineValidation supported =
@@ -498,6 +514,57 @@ void Editor::open_file(const std::filesystem::path &source) {
     (*text_).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
     refresh();
     focus_text();
+}
+void Editor::import_rtf_file(std::string_view bytes) {
+    const RtfImport imported = import_rtf(bytes);
+    const gf::TextBox::MultilineValidation supported =
+        gf::TextBox::validate_multiline_text(imported.markdown);
+    if (supported != gf::TextBox::MultilineValidation::valid)
+        throw std::runtime_error(
+            "The converted Markdown exceeds this development editor's 1 MiB or 4096-byte line "
+            "limit. The current document was kept.");
+    show_markdown(false);
+    show_csv(false);
+    (*text_).set_text(imported.markdown);
+    cancel_search();
+    save_identity_.reset();
+    // Untitled and unsaved: the converted text is dirty until saved as Markdown.
+    document_ = Document{};
+    (*text_).set_newline_sequence(preferred_newline(imported.markdown));
+    (*text_).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
+    refresh();
+    focus_text();
+    import_summary_ = "The RTF file was converted to Markdown as a new untitled document. Sizes "
+                      "are relative to its body text, " +
+                      imported.body + ".";
+    import_summary_ += imported.losses.empty() ? "\n\nNothing was lost." : "\n\nNot kept:\n" + imported.losses;
+    import_status_ = imported.losses.empty() ? "RTF imported as Markdown; nothing was lost."
+                                             : "RTF imported as Markdown; some formatting was not kept.";
+    // A file named at startup is imported inside the window's ready callback,
+    // while the host is still creating the window. Work posted there runs in
+    // that same creation turn, too early for a modal dialog, so the summary
+    // waits for the host's frame loop, which runs only once the window is up.
+    if (window()) {
+        const gf::FrameTime deadline = gf::FrameClock::now() + std::chrono::milliseconds(1);
+        import_summary_frame_ = (*window()).schedule_ui_timer(*this, gf::minimum_ui_timer_interval, deadline,
+                                                              ImportSummaryTick{observe()});
+    } else {
+        show_import_summary();
+    }
+}
+void Editor::show_import_summary() {
+    if (import_summary_.empty())
+        return;
+    const std::string summary = std::move(import_summary_);
+    const std::string status = std::move(import_status_);
+    import_summary_.clear();
+    import_status_.clear();
+    try {
+        static_cast<void>(message("RTF imported as Markdown", summary));
+    } catch (const std::exception &) {
+        // Without a dialog service the summary goes to the status line.
+        error(status);
+    }
 }
 bool Editor::save_to(const std::filesystem::path &path, const FileSnapshot &expected) {
     try {

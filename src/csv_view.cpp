@@ -52,6 +52,11 @@ void CsvView::initialize_control_tree() {
     entry_ = gf::make_control<gf::TextBox>(gf::StableId("csv.entry"));
     (*entry_).set_accessible_name("Cell source or formula; Enter to apply");
     (*entry_).set_maximum_length(4096);
+    // An in-place cell editor: plain Enter stores the cell (committed) and
+    // plain Escape abandons the edit (cancelled). Since GUI.Forms 0.2 a
+    // single-line box passes both keys on unless it opts in.
+    (*entry_).set_accepts_enter(true);
+    (*entry_).set_accepts_escape(true);
     add_child(entry_);
     vertical_ = gf::make_control<gf::VScrollBar>(gf::StableId("csv.vertical"));
     horizontal_ = gf::make_control<gf::HScrollBar>(gf::StableId("csv.horizontal"));

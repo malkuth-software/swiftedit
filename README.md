@@ -47,6 +47,12 @@ read-only mode at 16 MiB, invalid-byte save refusal and Save Text Copy. CSV
 commands preserve unaffected source spelling and offer strict exact arithmetic.
 See [command protocol](docs/COMMAND_PROTOCOL.md) for commands and examples.
 
+Opening an `.rtf` file imports it: GUI.Forms' stx_rtf2md library converts it to
+Markdown in its dialect (attribute spans such as `[text]{u color=#c00000}` for
+what Markdown lacks) and SwiftEdit opens the result as a new untitled document,
+with a summary of anything not kept. SwiftEdit never writes RTF. The command
+session's `rtf-to-markdown` does the same into a new file.
+
 The GUI and command model are not yet unified. The GUI still uses the public
 TextBox's 1 MiB / 4096-byte-line bounds and supports UTF-8 plus BOM-marked UTF-16.
 The command model preserves raw bytes and only publishes valid UTF-8. Native

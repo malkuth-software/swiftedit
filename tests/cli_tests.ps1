@@ -151,6 +151,22 @@ try {
     Assert ($sourceHash -eq $copyHash) 'Paged CLI text copy preserves valid source bytes'
     $response = Send-Request -Process $process -Fields @('save-text-copy',$largeTextCopy.Replace('\','\\'))
     Assert ($response[-1].StartsWith("error`t")) 'Paged CLI text copy refuses an existing destination'
+    $rtfSource = Join-Path $fixture 'import.rtf'
+    [IO.File]::WriteAllText($rtfSource, '{\rtf1\ansi{\*\defchp \fs22}\pard\plain\fs22 Hello {\b world}{\pict\pngblip 89}\par}', [Text.Encoding]::ASCII)
+    $rtfTarget = Join-Path $fixture 'import.md'
+    $response = Send-Request -Process $process -Fields @('rtf-to-markdown',$rtfSource.Replace('\','\\'),$rtfTarget.Replace('\','\\'))
+    Assert ($response[0] -eq "rtf-body`t11 pt (the document's default character format)") 'RTF import reports its body size'
+    Assert ($response[1] -eq "rtf-loss`t1 picture was skipped.") 'RTF import reports what was not kept'
+    Assert ($response[2] -eq "rtf-written`t16") 'RTF import reports the Markdown size'
+    Assert ($response[-1].StartsWith("ok`trtf-to-markdown`t")) 'RTF import succeeds through CLI'
+    $markdown = [IO.File]::ReadAllText($rtfTarget, [Text.Encoding]::UTF8)
+    Assert ($markdown -eq "Hello **world**`n") 'RTF import writes the converted Markdown'
+    $response = Send-Request -Process $process -Fields @('rtf-to-markdown',$rtfSource.Replace('\','\\'),$rtfTarget.Replace('\','\\'))
+    Assert ($response[-1].StartsWith("error`t")) 'RTF import never replaces an existing target'
+    $notRtf = Join-Path $fixture 'not-rtf.txt'
+    [IO.File]::WriteAllText($notRtf, 'plain text', [Text.Encoding]::ASCII)
+    $response = Send-Request -Process $process -Fields @('rtf-to-markdown',$notRtf.Replace('\','\\'),(Join-Path $fixture 'x.md').Replace('\','\\'))
+    Assert ($response[-1].StartsWith("error`tThe source is not RTF")) 'RTF import refuses a source that is not RTF'
     $cooperativeCopy = Join-Path $fixture 'cooperative-copy.txt'
     $response = Send-Request -Process $process -Fields @('text-copy-start',$cooperativeCopy.Replace('\','\\'))
     Assert ($response[0] -eq "text-copy-progress`t0`t16777216`t0") 'Text copy starts without source reads'

@@ -152,7 +152,7 @@ def main() -> None:
     shutil.copytree('third_party/md4c', root / 'licenses/MD4C', ignore=shutil.ignore_patterns('*.c', '*.h'))
     shutil.copy2('third_party/unicode/LICENSE.txt', root / 'licenses/Unicode.txt')
     component: str
-    for component in ['gui-forms-sdk', 'picker-sdk']:
+    for component in ['gui-forms-sdk', 'picker-sdk', 'stx-rtf2md-sdk']:
         notices: Path = sdk / component / 'share/licenses'
         if notices.is_dir():
             shutil.copytree(notices, root / 'licenses' / component)

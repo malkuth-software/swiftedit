@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tomllib
 from typing import BinaryIO
 
 ROOT: Path = Path(__file__).resolve().parents[1]
@@ -38,7 +39,8 @@ def source(path: Path, repository: str, revision: str) -> None:
         run(['git', '-C', str(path), 'checkout', '--detach', revision])
 
 
-def import_cache(archive: Path, destination: Path, expected: str, revision: str, platform: str) -> None:
+def import_cache(archive: Path, destination: Path, expected: str, repository: str, revision: str,
+                 platform: str) -> None:
     # Validate all metadata and paths before writing any cache/runtime entries.
     if digest(archive) != expected:
         raise ValueError('Provider cache digest differs from the dependency lock')
@@ -49,7 +51,7 @@ def import_cache(archive: Path, destination: Path, expected: str, revision: str,
         with manifest_file:
             manifest: dict = json.load(manifest_file)
         if (manifest.get('revision') != revision or manifest.get('platform') != platform
-                or manifest.get('repository') != 'falseywinchnet/gui_forms'):
+                or manifest.get('repository') != repository):
             raise ValueError('Provider cache source/platform mismatch')
         members: list[tarfile.TarInfo] = []
         member: tarfile.TarInfo
@@ -82,7 +84,7 @@ def restore_cache(platform: str, lock: dict) -> None:
         if result.returncode:
             print('Provider cache unavailable; compiling pinned source without imported objects.', flush=True)
             return
-    import_cache(archive, ROOT, lock['cache_sha256'][platform], lock['revision'], platform)
+    import_cache(archive, ROOT, lock['cache_sha256'][platform], lock['repository'], lock['revision'], platform)
     print('Verified provider compiler cache imported for ' + platform, flush=True)
 
 
@@ -116,7 +118,17 @@ def main() -> None:
     gui: Path = ROOT / 'gui_forms'
     picker: Path = ROOT / '.build/dependencies/file_manager'
     source(gui, lock['repository'], lock['revision'])
+    # GUI.Forms' build tools forward to template_harness, which they look for
+    # beside the checkout (gui_forms/tools/harness_link.py): here, at the root.
+    harness_lock: dict = tomllib.loads((gui / 'harness.lock').read_text(encoding='utf-8'))
+    source(ROOT / 'template_harness', harness_lock['harness']['repository'], harness_lock['harness']['commit'])
     source(picker, lock['picker_repository'], lock['picker_revision'])
+    # The standalone stx_rtf2md package builds from the same GUI.Forms checkout.
+    # SWIFTEDIT_STX_RTF2MD_SOURCE may name a local tree containing stx_rtf2md/
+    # for development before a revision lands; the manifest then records it,
+    # and Build-Native.py refuses to package it.
+    stx_override: str = os.environ.get('SWIFTEDIT_STX_RTF2MD_SOURCE', '')
+    stx: Path = Path(stx_override) if stx_override else gui
     # Frontend CMake declares the public backend client even for picker-only builds.
     # Initialize its recorded gitlink, but do not build or package backend services.
     run(['git', '-C', str(picker), 'submodule', 'update', '--init', '--depth', '1', '--', 'backend'])
@@ -146,7 +158,9 @@ def main() -> None:
         '-DGUI_FORMS_BUILD_GALLERY=OFF', '-DGUI_FORMS_BUILD_TESTS=OFF', '-DGUI_FORMS_BUILD_AUDIO=ON',
         '-DCMAKE_INSTALL_PREFIX=' + str(gui_sdk)]
     if arguments.platform == 'windows-x64':
-        options.extend(['-DGUI_FORMS_ENABLE_SKIA=OFF', '-DGUI_FORMS_ENABLE_HARFBUZZ_TEXT=OFF'])
+        # The provider's Win32 host draws text with its HarfBuzz/FreeType engine (ADR-004).
+        run(['sh', str(gui / 'third_party/fetch_text_stack.sh')])
+        options.extend(['-DGUI_FORMS_ENABLE_SKIA=OFF', '-DGUI_FORMS_ENABLE_HARFBUZZ_TEXT=ON'])
     else:
         if arguments.platform == 'linux-x64':
             os.environ['GUI_FORMS_SYSTEM_BUILD_TOOLS'] = '1'
@@ -158,6 +172,9 @@ def main() -> None:
         options.extend(['-DGUI_FORMS_SKIA_PREBUILT=ON', '-DGUI_FORMS_SKIA_OUT=' + str(skia)])
         if arguments.platform == 'linux-x64':
             options.append('-DGUI_FORMS_ENABLE_LINUX_HOST=ON')
+    # The text engine's pinned UAX #14 line breaking (libunibreak), required
+    # wherever HarfBuzz text is on, which is now every platform.
+    run(['sh', str(gui / 'third_party/fetch_linebreak.sh')])
     run(['cmake', '-S', str(gui), '-B', str(build / 'gui-forms')] + common + options)
     run(['cmake', '--build', str(build / 'gui-forms'), '--parallel', jobs])
     run(['cmake', '--install', str(build / 'gui-forms')])
@@ -174,7 +191,14 @@ def main() -> None:
     notices: Path = sdk / 'picker-sdk/share/licenses/FileManagerDocumentPicker'
     notices.mkdir(parents=True, exist_ok=True)
     shutil.copy2(picker / 'LICENSE', notices / 'LICENSE')
+    run(['cmake', '-S', str(stx / 'stx_rtf2md'), '-B', str(build / 'stx-rtf2md')] + common + [
+        '-DCMAKE_INSTALL_LIBDIR=lib', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON', '-DSTX_RTF2MD_TESTS=OFF',
+        '-DCMAKE_INSTALL_PREFIX=' + str(sdk / 'stx-rtf2md-sdk')])
+    run(['cmake', '--build', str(build / 'stx-rtf2md'), '--parallel', jobs])
+    run(['cmake', '--install', str(build / 'stx-rtf2md')])
+    stx_revision: str = 'local:' + str(stx) if stx_override else lock['revision']
     manifest: dict = {'provider_revision': lock['revision'], 'picker_revision': lock['picker_revision'],
+        'stx_rtf2md_revision': stx_revision,
         'platform': arguments.platform, 'dependency_mode': 'pinned-source-public-installed-targets',
         'compiler': subprocess.check_output(['clang', '--version'], text=True).strip()}
     (sdk / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

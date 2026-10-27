@@ -18,7 +18,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk;${sourceDir}/.build/native-windows-x64/sdk/picker-sdk",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk;${sourceDir}/.build/native-windows-x64/sdk/picker-sdk;${sourceDir}/.build/native-windows-x64/sdk/stx-rtf2md-sdk",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
@@ -44,7 +44,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-linux-x64/sdk/gui-forms-sdk;${sourceDir}/.build/native-linux-x64/sdk/picker-sdk",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-linux-x64/sdk/gui-forms-sdk;${sourceDir}/.build/native-linux-x64/sdk/picker-sdk;${sourceDir}/.build/native-linux-x64/sdk/stx-rtf2md-sdk",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
@@ -69,7 +69,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-macos-arm64/sdk/gui-forms-sdk;${sourceDir}/.build/native-macos-arm64/sdk/picker-sdk",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-macos-arm64/sdk/gui-forms-sdk;${sourceDir}/.build/native-macos-arm64/sdk/picker-sdk;${sourceDir}/.build/native-macos-arm64/sdk/stx-rtf2md-sdk",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",

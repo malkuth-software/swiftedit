@@ -79,6 +79,39 @@ int main() {
                 std::string_view(failure.what()) == "Markdown exceeds display storage budget.";
         }
         check(refused_link_storage, "URL copies across styled spans count against retained storage");
+
+        // The stx_rtf2md dialect: attribute spans and block attribute lines.
+        const std::vector<swiftedit::MarkdownBlock> dialect = swiftedit::parse_markdown(
+            "{align=center}\nCentred [under]{u color=#c00000} and [**big**]{size=+2 bg=#00ff00}\n\n"
+            "{align=right}\n## Right\n\nH[2]{sub}O, x[2]{sup}, [a [b]{size=-1} c]{u}\n\n"
+            "\\[not]\\{u} and `[code]{u}` and [x]{zz}\n");
+        check(dialect.size() == 4, "An attribute-only paragraph joins the block after it");
+        const swiftedit::MarkdownBlock &centred = dialect[0];
+        check(centred.alignment == swiftedit::MarkdownAlignment::center && centred.spans[0].text == "Centred ",
+              "A leading attribute line aligns its paragraph and is removed");
+        check(centred.spans[1].text == "under" && centred.spans[1].underline &&
+                  centred.spans[1].colour == swiftedit::MarkdownColour{0xc0, 0, 0},
+              "A span underlines and colours its text");
+        check(centred.spans[3].text == "big" && centred.spans[3].bold && centred.spans[3].size_step == 2 &&
+                  centred.spans[3].background == swiftedit::MarkdownColour{0, 0xff, 0},
+              "Emphasis inside a span keeps both");
+        check(dialect[1].kind == swiftedit::MarkdownKind::heading &&
+                  dialect[1].alignment == swiftedit::MarkdownAlignment::right,
+              "An attribute line before a heading aligns the heading");
+        const swiftedit::MarkdownBlock &scripts = dialect[2];
+        bool subscript = false, superscript = false, nested = false, outer = false;
+        for (const swiftedit::MarkdownSpan &span : scripts.spans) {
+            subscript = subscript || (span.text == "2" && span.subscript);
+            superscript = superscript || (span.text == "2" && span.superscript);
+            nested = nested || (span.text == "b" && span.underline && span.size_step == -1);
+            outer = outer || (span.text == "a " && span.underline && span.size_step == 0);
+        }
+        check(subscript && superscript && nested && outer, "Super/subscripts and nested spans compose");
+        std::string literal{};
+        for (const swiftedit::MarkdownSpan &span : dialect[3].spans)
+            literal += span.text;
+        check(literal == "[not]{u} and [code]{u} and [x]{zz}",
+              "Escaped brackets, code and unknown attributes stay literal");
         std::cout << "Markdown inert presentation tests passed.\n";
         return 0;
     } catch (const std::exception &failure) {

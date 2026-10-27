@@ -126,6 +126,10 @@ private:
         std::weak_ptr<Editor> owner{};
         void operator()() const;
     };
+    struct ImportSummaryTick {
+        std::weak_ptr<Editor> owner{};
+        void operator()(gf::FrameTime) const;
+    };
     struct WindowReady {
         std::weak_ptr<Editor> owner{};
         WindowKind kind{WindowKind::main};
@@ -189,6 +193,12 @@ private:
     void show_markdown(bool);
     void focus_text();
     void error(const std::string &);
+    // Opens converted RTF as a new untitled Markdown document (owner decision
+    // 5): the current document is replaced only after conversion succeeds.
+    void import_rtf_file(std::string_view bytes);
+    // Shows the last import's summary once, or its status-line form when no
+    // dialog can be shown.
+    void show_import_summary();
     gf::HostDialogChoice message(std::string title, std::string text,
                                  gf::HostMessageButtons buttons = gf::HostMessageButtons::ok);
     void after_unsaved(Continuation continuation);
@@ -250,6 +260,9 @@ private:
         Continuation continuation{Continuation::none};
     };
     std::optional<PendingSave> pending_save_{};
+    // The summary of an RTF import not yet shown, and its status-line form.
+    std::string import_summary_{}, import_status_{};
+    gf::FrameRequestToken import_summary_frame_{};
     CharacterWindow characters_{}, controls_{};
     std::shared_ptr<QueryField> query_{};
     std::shared_ptr<gf::TextBox> replacement_{};

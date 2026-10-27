@@ -175,6 +175,7 @@ def main() -> None:
     runtime: Path = Path(os.environ['GUI_FORMS_LLVM_RUNTIME']).resolve()
     shutil.copytree(sdk / 'gui-forms-sdk/share/licenses', notices, dirs_exist_ok=True)
     shutil.copytree(sdk / 'picker-sdk/share/licenses', notices, dirs_exist_ok=True)
+    shutil.copytree(sdk / 'stx-rtf2md-sdk/share/licenses', notices, dirs_exist_ok=True)
     shutil.copytree(runtime / 'share/licenses', notices, dirs_exist_ok=True)
     shutil.copy2('third_party/md4c/LICENSE.md', notices / 'MD4C.md')
     shutil.copy2('third_party/unicode/LICENSE.txt', notices / 'Unicode.txt')

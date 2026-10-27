@@ -53,8 +53,21 @@ private:
         // prepared model is adopted and never outlive the owning view.
         std::string_view url{};
         double baseline{}, underline{}, strike_y{};
-        bool strike{}, code{}, border{}, rule{};
+        // How far a super- or subscript moves its baseline from the line's.
+        double script_shift{};
+        bool strike{}, code{}, border{}, rule{}, underlined{};
+        // The dialect's text and background colours, when a span sets them.
+        std::optional<gf::Color> colour{}, background{};
     };
+    // Moves the runs of one finished line, next[first] onward, so the line
+    // is centred or right-aligned between left and right; end is where the
+    // line's text stops.
+    static void align_line(std::vector<Run> &next, std::size_t first, double left, double right, double end,
+                           swiftedit::MarkdownAlignment alignment);
+    // Moves the runs of one finished line, next[first] onward, down from the
+    // line's top so runs of every size share the tallest run's baseline.
+    // Returns the height the line then needs below top.
+    static double align_baselines(std::vector<Run> &next, std::size_t first, double top);
     struct RunOrder {
         bool operator()(const Run &left, const Run &right) const;
     };
