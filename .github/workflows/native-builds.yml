@@ -14,9 +14,14 @@ on:
         default: false
 permissions:
   contents: read
+# A newer push to a pull request cancels its older run. Master pushes are
+# never cancelled: each run completes, and a merge landing meanwhile waits
+# (GitHub keeps only the newest waiting run), so the release run of the
+# current master always finishes. Publish-Release.py publishes only when its
+# revision is still master's head.
 concurrency:
   group: native-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   prepare:
     runs-on: ubuntu-24.04
@@ -90,10 +95,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TOOLCHAIN_PYTHON: ${{ steps.toolchain-python.outputs.python-path }}
-        # The harness GUI.Forms pins reads the toolchain from GITHUB_REPOSITORY's
-        # releases. The runner keeps its own GITHUB_* values over a step's env,
-        # so GUI.Forms' repository is named on the command itself.
-        run: GITHUB_REPOSITORY=malkuth-software/gui_forms "$TOOLCHAIN_PYTHON" gui_forms/tools/windows_toolchain.py restore
+        # The harness reads the toolchain from its project file's [toolchain]
+        # repository: GUI.Forms' own releases.
+        run: '"$TOOLCHAIN_PYTHON" gui_forms/tools/windows_toolchain.py restore'
       - name: Install macOS LLVM 22
         if: runner.os == 'macOS'
         run: |
@@ -186,6 +190,10 @@ jobs:
           path: .build/native-${{ matrix.platform }}/app/dist/*
           if-no-files-found: error
           compression-level: 0
+      # SwiftEdit's own code under AddressSanitizer and UndefinedBehaviorSanitizer
+      # (LeakSanitizer too on Linux and macOS), headless tests only, never packaged.
+      - name: Test SwiftEdit under the sanitizers
+        run: python -B tools/Build-Native.py --platform ${{ matrix.platform }} --sanitize --jobs 4
       - name: Preserve native test and package diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -194,6 +202,7 @@ jobs:
           path: |
             .build/compiler-cache.txt
             .build/native-${{ matrix.platform }}/app/Testing/Temporary/
+            .build/native-${{ matrix.platform }}/app-sanitize/Testing/Temporary/
             .build/native-${{ matrix.platform }}/app/mac-package-*/startup.log
             .build/native-${{ matrix.platform }}/app/mac-package-*/idle-stack*.txt
             .build/native-${{ matrix.platform }}/app/native-visual-*/*.png

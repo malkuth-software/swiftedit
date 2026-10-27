@@ -104,6 +104,73 @@ def prepare_runtime(gui: Path, jobs: str) -> None:
     run([sys.executable, str(gui / 'tools/audit_macos_minimum.py'), str(runtime / 'lib')])
 
 
+# Local builds only: SWIFTEDIT_LOCKSTEP names the machine's lockstep record
+# (D:/malkuth/cache/lockstep/current-<target>.json), the one GUI.Forms build
+# every product on this machine shares. Its installed prefix carries GUI.Forms
+# and the stx packages, so only the picker is built here, in trees apart from
+# the pinned ones (picker-lockstep, sdk-lockstep, app-lockstep).
+LOCKSTEP_VARIABLE: str = 'SWIFTEDIT_LOCKSTEP'
+LOCKSTEP_MODE: str = 'lockstep-installed-prefix'
+
+
+def read_lockstep(platform: str) -> dict | None:
+    """The lockstep record SWIFTEDIT_LOCKSTEP names, or None when it is unset."""
+    named: str = os.environ.get(LOCKSTEP_VARIABLE, '')
+    if not named:
+        return None
+    record: dict = json.loads(Path(named).read_text(encoding='utf-8'))
+    if record.get('schema') != 1 or record.get('target') != platform:
+        raise ValueError('Lockstep record ' + named + ' is not a schema 1 record for ' + platform)
+    return record
+
+
+def build_picker(picker: Path, tree: Path, sdk: Path, common: list[str], gui_prefix: Path, provider: str,
+                 platform: str, jobs: str) -> None:
+    """Builds the document picker against the GUI.Forms installed at gui_prefix into sdk/picker-sdk."""
+    consumption: Path = tree.parent / (tree.name + '-consumption.json')
+    consumption.parent.mkdir(parents=True, exist_ok=True)
+    consumption.write_text(json.dumps({'identity': {
+        'id': 'swiftedit-' + platform + '-' + provider,
+        'state': 'development', 'source_revision': provider},
+        'validation': 'Consumer tests must pass before packaging.'}, indent=2) + '\n')
+    run(['cmake', '-S', str(picker / 'frontend'), '-B', str(tree)] + common + [
+        '-DCMAKE_PREFIX_PATH=' + str(gui_prefix), '-DFILE_MANAGER_BUILD_TESTS=OFF',
+        '-DFILE_MANAGER_GUI_FORMS_MANIFEST=' + str(consumption)])
+    run(['cmake', '--build', str(tree), '--target', 'file_manager_document_picker_view', '--parallel', jobs])
+    run(['cmake', '--install', str(tree), '--prefix', str(sdk / 'picker-sdk'), '--component', 'DocumentPicker'])
+    notices: Path = sdk / 'picker-sdk/share/licenses/FileManagerDocumentPicker'
+    notices.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(picker / 'LICENSE', notices / 'LICENSE')
+
+
+def prepare_lockstep(record: dict, lock: dict, platform: str, jobs: str) -> None:
+    """Builds only the pinned picker against the lockstep prefix and records it in sdk-lockstep/manifest.json."""
+    picker: Path = ROOT / '.build/dependencies/file_manager'
+    source(picker, lock['picker_repository'], lock['picker_revision'])
+    run(['git', '-C', str(picker), 'submodule', 'update', '--init', '--depth', '1', '--', 'backend'])
+    build: Path = ROOT / ('.build/native-' + platform)
+    sdk: Path = build / 'sdk-lockstep'
+    # The shared compiler cache, with SwiftEdit's own checkout as the base.
+    os.environ['CCACHE_DIR'] = record['ccache_dir']
+    os.environ['CCACHE_BASEDIR'] = str(ROOT)
+    os.environ['CCACHE_COMPILERCHECK'] = 'content'
+    if record['llvm_runtime']:
+        os.environ['GUI_FORMS_LLVM_RUNTIME'] = record['llvm_runtime']
+    common: list[str] = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
+        '-DCMAKE_TOOLCHAIN_FILE=' + record['toolchain_file'],
+        '-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
+        '-DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache']
+    provider: str = 'lockstep:' + record['commit']
+    build_picker(picker, build / 'picker-lockstep', sdk, common, Path(record['prefix']), provider, platform, jobs)
+    manifest: dict = {'provider_revision': provider, 'picker_revision': lock['picker_revision'],
+        'stx_rtf2md_revision': provider, 'gui_forms_prefix': record['prefix'],
+        'toolchain_file': record['toolchain_file'], 'font_dir': record['font_dir'],
+        'llvm_runtime': record['llvm_runtime'], 'ccache_dir': record['ccache_dir'],
+        'platform': platform, 'dependency_mode': LOCKSTEP_MODE,
+        'compiler': subprocess.check_output(['clang', '--version'], text=True).strip()}
+    (sdk / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+
+
 def main() -> None:
     parser: argparse.ArgumentParser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--platform', choices=['windows-x64', 'linux-x64', 'macos-arm64'], required=True)
@@ -115,12 +182,22 @@ def main() -> None:
         parser.error('--jobs must be positive')
     os.chdir(ROOT)
     lock: dict = json.loads((ROOT / 'ci/dependencies.json').read_text())
+    lockstep: dict | None = read_lockstep(arguments.platform)
+    if lockstep is not None:
+        if arguments.restore_cache or arguments.fetch_only:
+            parser.error('a lockstep build fetches and restores nothing')
+        prepare_lockstep(lockstep, lock, arguments.platform, str(arguments.jobs))
+        return
     gui: Path = ROOT / 'gui_forms'
     picker: Path = ROOT / '.build/dependencies/file_manager'
     source(gui, lock['repository'], lock['revision'])
     # GUI.Forms' build tools forward to template_harness, which they look for
-    # beside the checkout (gui_forms/tools/harness_link.py): here, at the root.
-    harness_lock: dict = tomllib.loads((gui / 'harness.lock').read_text(encoding='utf-8'))
+    # beside the checkout (gui_forms/tools/harness_link.py): here, at the root,
+    # at SwiftEdit's harness.lock, which must equal the GUI.Forms pin's.
+    harness_lock: dict = tomllib.loads((ROOT / 'harness.lock').read_text(encoding='utf-8'))
+    provider_harness: dict = tomllib.loads((gui / 'harness.lock').read_text(encoding='utf-8'))
+    if harness_lock['harness'] != provider_harness['harness']:
+        raise ValueError('harness.lock differs from gui_forms/harness.lock at the GUI.Forms pin')
     source(ROOT / 'template_harness', harness_lock['harness']['repository'], harness_lock['harness']['commit'])
     source(picker, lock['picker_repository'], lock['picker_revision'])
     # The standalone stx_rtf2md package builds from the same GUI.Forms checkout.
@@ -178,19 +255,7 @@ def main() -> None:
     run(['cmake', '-S', str(gui), '-B', str(build / 'gui-forms')] + common + options)
     run(['cmake', '--build', str(build / 'gui-forms'), '--parallel', jobs])
     run(['cmake', '--install', str(build / 'gui-forms')])
-    consumption: Path = build / 'picker-consumption.json'
-    consumption.write_text(json.dumps({'identity': {
-        'id': 'swiftedit-' + arguments.platform + '-' + lock['revision'],
-        'state': 'development', 'source_revision': lock['revision']},
-        'validation': 'Consumer tests must pass before packaging.'}, indent=2) + '\n')
-    run(['cmake', '-S', str(picker / 'frontend'), '-B', str(build / 'picker')] + common + [
-        '-DCMAKE_PREFIX_PATH=' + str(gui_sdk), '-DFILE_MANAGER_BUILD_TESTS=OFF',
-        '-DFILE_MANAGER_GUI_FORMS_MANIFEST=' + str(consumption)])
-    run(['cmake', '--build', str(build / 'picker'), '--target', 'file_manager_document_picker_view', '--parallel', jobs])
-    run(['cmake', '--install', str(build / 'picker'), '--prefix', str(sdk / 'picker-sdk'), '--component', 'DocumentPicker'])
-    notices: Path = sdk / 'picker-sdk/share/licenses/FileManagerDocumentPicker'
-    notices.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(picker / 'LICENSE', notices / 'LICENSE')
+    build_picker(picker, build / 'picker', sdk, common, gui_sdk, lock['revision'], arguments.platform, jobs)
     run(['cmake', '-S', str(stx / 'stx_rtf2md'), '-B', str(build / 'stx-rtf2md')] + common + [
         '-DCMAKE_INSTALL_LIBDIR=lib', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON', '-DSTX_RTF2MD_TESTS=OFF',
         '-DCMAKE_INSTALL_PREFIX=' + str(sdk / 'stx-rtf2md-sdk')])

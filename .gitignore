@@ -7,3 +7,6 @@ gui_forms/
 __pycache__/
 /template_harness/
 /.ci/
+/notes/
+/notes-*/
+/projects/

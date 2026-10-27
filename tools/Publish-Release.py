@@ -42,7 +42,7 @@ def main() -> None:
     if tag != 'v' + version:
         raise RuntimeError('Release tag must match the tested build version')
     repository: str = gh(['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'])
-    if repository != 'falseywinchnet/swiftedit':
+    if repository != 'malkuth-software/swiftedit':
         raise RuntimeError('Unexpected publication destination: ' + repository)
     branch_publication: bool = os.environ.get('GITHUB_REF') == 'refs/heads/master'
     if branch_publication and not current_master(repository, revision):
