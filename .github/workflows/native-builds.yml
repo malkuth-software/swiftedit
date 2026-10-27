@@ -4,8 +4,8 @@ on:
     branches: [master]
     tags: ['v*']
     paths-ignore: ['docs/**', '*.md']
+  # Every pull request runs, so "SwiftEdit checks" always reports for branch protection.
   pull_request:
-    paths-ignore: ['docs/**', '*.md']
   workflow_dispatch:
     inputs:
       publish:
@@ -90,9 +90,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TOOLCHAIN_PYTHON: ${{ steps.toolchain-python.outputs.python-path }}
-          # The pinned GUI.Forms tool reads the toolchain from its own repository's releases.
-          GITHUB_REPOSITORY: malkuth-software/gui_forms
-        run: '"$TOOLCHAIN_PYTHON" gui_forms/tools/windows_toolchain.py restore'
+        # The harness GUI.Forms pins reads the toolchain from GITHUB_REPOSITORY's
+        # releases. The runner keeps its own GITHUB_* values over a step's env,
+        # so GUI.Forms' repository is named on the command itself.
+        run: GITHUB_REPOSITORY=malkuth-software/gui_forms "$TOOLCHAIN_PYTHON" gui_forms/tools/windows_toolchain.py restore
       - name: Install macOS LLVM 22
         if: runner.os == 'macOS'
         run: |
