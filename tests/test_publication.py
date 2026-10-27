@@ -102,11 +102,8 @@ class PublicationTests(unittest.TestCase):
         self.assertIn('InstallDir "$LOCALAPPDATA\\Programs\\SwiftEdit"', script)
         self.assertIn('CurrentVersion\\Uninstall\\SwiftEdit"', script)
         control: str = debian_control('0.4.1', 'amd64', 'libc6')
-        self.assertIn('Package: malkuth-swiftedit\n', control)
+        self.assertIn('Package: swiftedit\n', control)
         self.assertIn('Maintainer: Malkuth Software <maintainer@malkuthsoft.com>\n', control)
-        field: str
-        for field in ['Replaces', 'Conflicts', 'Provides']:
-            self.assertIn(field + ': swiftedit\n', control)
 
     def test_installation_is_not_started_on_developer_machine(self) -> None:
         with patch.dict('os.environ', {'GITHUB_ACTIONS': 'false'}):

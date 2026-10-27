@@ -15,10 +15,9 @@ from publication_version import project_version
 # left them, so an installed SwiftEdit upgrades in place.
 VENDOR: str = 'Malkuth Software'
 MACOS_PACKAGE_IDENTIFIER: str = 'com.malkuthsoft.swiftedit'
-DEBIAN_PACKAGE: str = 'malkuth-swiftedit'
-# The Debian package's earlier name: the new package replaces it, so apt
-# removes it and takes over its files in one installation.
-DEBIAN_EARLIER_PACKAGE: str = 'swiftedit'
+# The Debian package keeps the product's own name: the vendor's name does not
+# go into package names (owner, 2026-10-27).
+DEBIAN_PACKAGE: str = 'swiftedit'
 DEBIAN_MAINTAINER: str = 'Malkuth Software <maintainer@malkuthsoft.com>'
 
 
@@ -205,12 +204,10 @@ def macos(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
 
 
 def debian_control(version: str, architecture: str, dependencies: str) -> str:
-    """The installed package's DEBIAN/control: vendor identity, and the takeover of the earlier package name."""
+    """The installed package's DEBIAN/control, naming the vendor as maintainer."""
     result: str = ('Package: ' + DEBIAN_PACKAGE + '\nVersion: ' + version + '\nArchitecture: ' + architecture + '\n'
         'Maintainer: ' + DEBIAN_MAINTAINER + '\nSection: editors\nPriority: optional\n'
         'Depends: ' + dependencies + '\n'
-        'Replaces: ' + DEBIAN_EARLIER_PACKAGE + '\nConflicts: ' + DEBIAN_EARLIER_PACKAGE + '\n'
-        'Provides: ' + DEBIAN_EARLIER_PACKAGE + '\n'
         'Description: Native text editor with Markdown and CSV views\n')
     return result
 
