@@ -14,9 +14,14 @@ on:
         default: false
 permissions:
   contents: read
+# A newer push to a pull request cancels its older run. Master pushes are
+# never cancelled: each run completes, and a merge landing meanwhile waits
+# (GitHub keeps only the newest waiting run), so the release run of the
+# current master always finishes. Publish-Release.py publishes only when its
+# revision is still master's head.
 concurrency:
   group: native-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   prepare:
     runs-on: ubuntu-24.04
