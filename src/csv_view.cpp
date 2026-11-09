@@ -21,7 +21,7 @@ std::string cell_label(std::string_view value) {
     return result;
 }
 } // namespace
-CsvView::CsvView(gf::StableId id) : Control(std::move(id)) { set_focusable(true); }
+CsvView::CsvView(gf::StableId id) : Control(std::move(id)) { focusable = true; }
 CsvView::~CsvView() = default;
 std::weak_ptr<CsvView> CsvView::observe() {
     const std::shared_ptr<CsvView> self = std::static_pointer_cast<CsvView>(shared_from_this());

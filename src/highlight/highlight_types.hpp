@@ -69,8 +69,8 @@ struct LineIndex final {
 };
 
 // What a token is. Every language reports these kinds; a presenter maps each
-// to a theme role (`.syntax-comment` and so on), so a language never names a
-// colour. The order is part of the presenter contract: a presenter may index
+// to a colour of its own (StylePalette in src/code_editor), so a language
+// never names a colour. The order is part of the presenter contract: a presenter may index
 // a table of `token_kind_count` entries by the kind's value.
 enum class TokenKind : std::uint8_t {
     plain,              // text no other kind describes; also every gap between tokens

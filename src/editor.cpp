@@ -167,12 +167,12 @@ void Editor::button_action(ButtonAction action) {
     }
 }
 void Editor::place_find_label(const char *id, const char *text, gf::Rect bounds) {
-    const std::shared_ptr<gf::Label> label = gf::make_control<gf::Label>(gf::StableId(id), text);
+    const std::shared_ptr<gf::Label> label = gf::make_control<gf::Label>(gf::StableId(std::string_view(id)), text);
     (*find_.root).place(label, bounds);
 }
 std::shared_ptr<gf::Button> Editor::place_find_button(const char *id, const char *text,
                                                       gf::Rect bounds, ButtonAction action) {
-    const std::shared_ptr<gf::Button> button = gf::make_control<gf::Button>(gf::StableId(id), text);
+    const std::shared_ptr<gf::Button> button = gf::make_control<gf::Button>(gf::StableId(std::string_view(id)), text);
     (*find_.root).place(button, bounds);
     gf::SubscriptionToken subscription =
         (*button).clicked().subscribe(*this, ButtonListener{observe(), action});
@@ -326,6 +326,7 @@ void Editor::refresh() {
         character_count_ = counted_text_.grapheme_count().value();
     }
     static_cast<void>(code_.update(content));
+    styles_.paint(code_, *text_);
     for (const swiftedit::highlight::Language *const language : swiftedit::highlight::registered_languages()) {
         const std::string command = "language-" + std::string((*language).name());
         const std::map<std::string, std::shared_ptr<gf::Command>>::const_iterator found = commands_.find(command);
@@ -346,6 +347,7 @@ void Editor::refresh() {
 // checks in step.
 void Editor::choose_language(const swiftedit::highlight::Language &language) {
     code_.set_language(language);
+    styles_.paint(code_, *text_);
 }
 void Editor::refresh_title(const std::string_view content) {
     if (!handle_.active())
@@ -878,6 +880,8 @@ void Editor::ready(gf::Window &w, gf::ApplicationWindowHandle handle,
         }
     }
     focus_text();
+    if (!screenshot_directory_.empty())
+        start_screenshots();
 }
 void Editor::closing(gf::HostCloseRequest &request) {
     if (close_authorized_)

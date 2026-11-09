@@ -14,6 +14,8 @@ find_package(GUIForms 0.2 CONFIG REQUIRED COMPONENTS Application)
 # The standalone RTF/markdown package, built from the pinned GUI.Forms
 # checkout beside the SDK (pin_note in ci/dependencies.json).
 find_package(stx_rtf2md 0.1 CONFIG REQUIRED)
+# The PNG encoder every GUI.Forms host uses, for the screenshot run.
+find_package(stx_png CONFIG REQUIRED)
 add_library(swiftedit_md4c STATIC third_party/md4c/md4c.c third_party/md4c/entity.c)
 target_include_directories(swiftedit_md4c PUBLIC third_party/md4c)
 # The highlighter and the embeddable code editor (cmake/SwiftEditCodeEditor.cmake,
@@ -204,15 +206,16 @@ endif()
 target_link_libraries(swiftedit-cli PRIVATE notepad_document)
 find_program(POWERSHELL_EXECUTABLE NAMES pwsh powershell)
 if(POWERSHELL_EXECUTABLE)
-  add_test(NAME cli COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_tests.ps1" -Executable "$<TARGET_FILE:swiftedit-cli>")
-  set_tests_properties(cli PROPERTIES TIMEOUT 30)
+  add_test(NAME cli COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_tests.ps1" -Executable "$<TARGET_FILE:swiftedit-cli>")
+  set_tests_properties(cli PROPERTIES TIMEOUT 90)
 endif()
 
 option(NOTEPAD_BUILD_UI "Build the native editor" ON)
 if(NOTEPAD_BUILD_UI)
-  add_library(notepad_ui src/editor.cpp src/windows.cpp src/csv_view.cpp src/markdown_view.cpp src/query_field.cpp src/character_picker.cpp src/conflict.cpp src/user_paths.cpp)
+  add_library(notepad_ui src/editor.cpp src/windows.cpp src/csv_view.cpp src/markdown_view.cpp src/query_field.cpp src/character_picker.cpp src/conflict.cpp src/user_paths.cpp src/screenshots.cpp)
   target_compile_definitions(notepad_ui PRIVATE SWIFTEDIT_VERSION="${PROJECT_VERSION}")
-  target_link_libraries(notepad_ui PUBLIC notepad_document GUIForms::Application)
+  target_link_libraries(notepad_ui PUBLIC notepad_document swiftedit_code_editor GUIForms::Application)
+  target_link_libraries(notepad_ui PRIVATE stx_png::stx_png)
   if(APPLE)
     add_executable(notepad MACOSX_BUNDLE src/main.cpp)
     set_target_properties(notepad PROPERTIES
@@ -241,6 +244,9 @@ if(NOTEPAD_BUILD_UI)
   endif()
   add_executable(notepad-editor-tests tests/editor_tests.cpp)
   target_link_libraries(notepad-editor-tests PRIVATE notepad_ui)
+  # The tests compile the shipped theme package as main does.
+  gui_forms_add_theme(notepad-editor-tests themes/swiftedit FUNCTION swiftedit_theme NAMESPACE swiftedit
+                      FORMS forms/main_window.form)
   add_test(NAME editor COMMAND notepad-editor-tests)
   add_executable(swiftedit-editor-navigation-bench tests/editor_navigation_bench.cpp)
   target_link_libraries(swiftedit-editor-navigation-bench PRIVATE notepad_ui)

@@ -1,5 +1,6 @@
 #include "editor.hpp"
 #include "user_paths.hpp"
+#include "swiftedit_theme.hpp"
 #include <deque>
 #include <fstream>
 #include <iostream>
@@ -91,6 +92,21 @@ void check(bool value, const char *message) {
         throw std::runtime_error(message);
 }
 
+// The shipped theme package compiles onto the GUI.Forms base without a
+// finding, as main compiles it when it makes the application.
+void verify_theme_package() {
+    namespace gf = gui_forms;
+    gf::ApplicationConfig config{};
+    config.theme.base = gf::ThemeBase::gui_forms;
+    config.theme.packages.push_back(swiftedit::swiftedit_theme());
+    gf::ApplicationCreateResult created = gf::Application::create(std::move(config));
+    for (const gf::ThemeCompileDiagnostic &finding : created.findings)
+        std::cerr << "theme finding " << finding.code << ' ' << finding.file << ':' << finding.line
+                  << ' ' << finding.detail << '\n';
+    check(static_cast<bool>(created), "SwiftEdit's theme package compiles");
+    check(created.findings.empty(), "SwiftEdit's theme package compiles without a warning");
+}
+
 void verify_document_scrollbars() {
     const std::shared_ptr<notepad::Editor> editor =
         gf::make_control<notepad::Editor>(gf::StableId("scrollbars.editor"));
@@ -128,7 +144,7 @@ void verify_document_scrollbars() {
     wheel.position = {bounds.x + 40, bounds.y + 40};
     wheel.wheel_delta = {0, -1};
     text.on_pointer(wheel);
-    check(wheel.handled && text.scroll_offset().y > before_wheel &&
+    check(wheel.handled && text.scroll_target().y > before_wheel &&
               text.scroll_offset().y == text.vertical_scroll().value(),
           "Wheel scrolling updates the same document scrollbar position");
 
@@ -237,8 +253,7 @@ void verify_language_menu() {
     check((*editor).code_document().text() == "a { b: c; }" &&
               (*editor).code_document().outline().rules().size() == 1U,
           "The mirror is lexed as CSS");
-    (*(*editor).text_control()).text = "a { b: c; }
-d { e: f; }";
+    (*(*editor).text_control()).text = "a { b: c; }\nd { e: f; }";
     check((*editor).code_document().outline().rules().size() == 2U, "Edits reach the mirror");
     (*editor).execute("language-form");
     check((*languages[2]).state().checked && (*editor).code_document().language().name() == "form",
@@ -279,7 +294,7 @@ void verify_conflict_fields() {
     }
     (*editor).execute("save");
     (*editor).execute("conflict-copy");
-    const gf::Control::Ptr root = (*windows[8].model).root();
+    const gf::Control::Ptr root = (*windows[6].model).root();
     const std::shared_ptr<gf::TextBox> filename =
         std::dynamic_pointer_cast<gf::TextBox>(find_control(root, "conflict.filename"));
     const std::shared_ptr<gf::ComboBox> encoding =
@@ -577,7 +592,7 @@ void verify_grapheme_status() {
     (*text).text = "x\n";
     (*text).text = "x\r";
     (*text).select(gui_forms::Utf8Offset(0), gui_forms::Utf8Offset(0));
-    check((*status).text.read().starts_with("Ln 1, Col 1 |") && (*status).text.read().ends_with(" | CR"),
+    check((*status).text.read().starts_with("Ln 1, Col 1 |") && (*status).text.read().find(" | CR | ") != std::string::npos,
           "Caret-only update retains the latest same-length ending change");
 }
 struct WindowLaunchProbe {
@@ -760,6 +775,7 @@ void verify_query_occurrence_history() {
 }
 int main() {
     try {
+        verify_theme_package();
         verify_view_menu_state();
         verify_language_menu();
         verify_document_scrollbars();
@@ -987,7 +1003,7 @@ int main() {
         check((*text).text.read() == "2,8\r\n4,5", "CSV menu converts formula to value");
         (*editor).execute("undo");
         check((*text).text.read() == "2,=A1*4\r\n4,5", "Conversion is one undo step");
-        const std::vector<gf::MenuItemSpec> &context_items = (*grid).context_menu.read().items();
+        const std::vector<gf::MenuItemSpec> &context_items = (*grid).context_menu().items();
         check(context_items.size() == 1 && context_items[0].text == "Convert to Value",
               "Cell context menu includes Convert to Value");
         window.perform_layout();
@@ -997,12 +1013,12 @@ int main() {
         context_press.button = gf::PointerButton::secondary;
         context_press.position = {grid_bounds.x + 56 + 144 + 12, grid_bounds.y + 68 + 12};
         (*grid).on_pointer(context_press);
-        check((*grid).context_menu.read().is_open(), "Right click opens the cell menu");
+        check((*grid).context_menu().is_open(), "Right click opens the cell menu");
         const bool context_executed = (*context_items[0].command).execute("csv.context");
         settle_csv(*grid);
         check(context_executed && (*text).text.read() == "2,8\r\n4,5",
               "Context menu invokes the same conversion operation");
-        (*grid).context_menu.read().close();
+        (*grid).context_menu().close();
         (*editor).execute("undo");
         (*editor).execute("copy");
         check(services.clipboard == "=A1*4", "Grid copy uses selected cell source");

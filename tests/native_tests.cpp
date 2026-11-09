@@ -53,9 +53,9 @@ public:
     std::shared_ptr<notepad::Editor> editor{};
     gf::Window *main{};
     gf::Window *find_window{};
-    std::array<gf::ApplicationWindowHandle, 9> handles{};
-    std::array<unsigned, 9> close_count{};
-    std::array<WindowHooks, 9> hooks{};
+    std::array<gf::ApplicationWindowHandle, 7> handles{};
+    std::array<unsigned, 7> close_count{};
+    std::array<WindowHooks, 7> hooks{};
     gf::ApplicationWindowHandle main_handle{};
     std::size_t ready_count{};
     bool passed{};
@@ -135,7 +135,7 @@ public:
                     (*(*editor).text_control()).select(gf::Utf8Offset(0), gf::Utf8Offset(6));
                     find_requested_at = std::chrono::steady_clock::now();
                     (*editor).execute("find");
-                    require(handles[3].active(), "Owned find window active");
+                    require(handles[1].active(), "Owned find window active");
                     const std::shared_ptr<notepad::QueryField> opened_query =
                         std::dynamic_pointer_cast<notepad::QueryField>(
                             find_control((*find_window).root(), "find.query"));
@@ -200,50 +200,24 @@ public:
                 (*editor).execute("undo");
                 require((*(*editor).text_control()).text.read() == "native saved\r\n",
                         "Replace All single undo");
-                static_cast<void>(handles[3].request_close());
+                static_cast<void>(handles[1].request_close());
                 break;
             }
             case 1:
                 (*editor).execute("font");
-                require(handles[4].active(), "Owned font window active");
-                static_cast<void>(handles[4].request_close());
-                break;
-            case 2:
-                (*editor).execute("open");
-                require(!(*editor).enabled.read(), "Picker suppresses owner controls");
-                static_cast<void>(handles[1].request_close());
-                break;
-            case 3:
-                if (close_count[1] < 1) {
-                    --stage;
-                    return;
-                }
-                std::cout << "open picker closed; owner enabled=" << (*editor).enabled.read()
-                          << std::endl;
-                require((*editor).enabled.read(), "Picker cancellation restores owner controls");
-                std::cout << "show save as" << std::endl;
-                (*editor).execute("save-as");
-                require(!(*editor).enabled.read(), "Save As suppresses owner controls");
+                require(handles[2].active(), "Owned font window active");
                 static_cast<void>(handles[2].request_close());
                 break;
+            case 2:
+            case 3:
             case 4:
-                if (close_count[2] < 1) {
-                    --stage;
-                    return;
-                }
-                require((*editor).enabled.read(), "Save As cancellation restores owner controls");
-                (*editor).execute("open");
-                require(!(*editor).enabled.read(), "Picker reusable presentation");
-                static_cast<void>(handles[1].request_close());
+                // Open and Save As show the host's modal file dialogs,
+                // which a native test cannot dismiss; the stages stay
+                // numbered so the later stages keep their order.
                 break;
             case 5:
-                if (close_count[1] < 2) {
-                    --stage;
-                    return;
-                }
-                require((*editor).enabled.read(), "Reopened picker cancellation");
                 (*editor).execute("characters");
-                require(handles[5].active(), "Owned Unicode dialog active");
+                require(handles[3].active(), "Owned Unicode dialog active");
                 (*(*editor).character_picker(false)).select_codepoint(0x1f600);
                 (*(*editor).character_picker(false)).insert_selected();
                 require((*(*editor).text_control()).text.read().find("\xf0\x9f\x98\x80") !=
@@ -252,11 +226,11 @@ public:
                 (*editor).execute("undo");
                 require((*(*editor).text_control()).text.read() == "native saved\r\n",
                         "Unicode insertion undo");
-                static_cast<void>(handles[5].request_close());
+                static_cast<void>(handles[3].request_close());
                 break;
             case 6:
                 (*editor).execute("controls");
-                require(handles[6].active(), "Owned control dialog active");
+                require(handles[4].active(), "Owned control dialog active");
                 (*(*editor).character_picker(true)).select_codepoint(0x200b);
                 (*(*editor).character_picker(true)).insert_selected();
                 require((*(*editor).text_control()).text.read().find("\xe2\x80\x8b") !=
@@ -265,16 +239,16 @@ public:
                 (*editor).execute("undo");
                 require((*(*editor).text_control()).text.read() == "native saved\r\n",
                         "Control insertion undo");
-                static_cast<void>(handles[6].request_close());
+                static_cast<void>(handles[4].request_close());
                 break;
             case 7:
-                if (close_count[5] < 1 || close_count[6] < 1) {
+                if (close_count[3] < 1 || close_count[4] < 1) {
                     --stage;
                     return;
                 }
                 (*(*editor).text_control()).text = "mixed\nline\r\n";
                 (*editor).execute("save");
-                require((*editor).save_choice_pending() && handles[7].active(),
+                require((*editor).save_choice_pending() && handles[5].active(),
                         "Native mixed-ending choice is active before publication");
                 (*editor).execute("cancel-save");
                 require(!(*editor).save_choice_pending() && (*editor).enabled.read(),
@@ -298,7 +272,7 @@ public:
                 external << "external native change";
                 external.close();
                 (*editor).execute("save");
-                require((*editor).conflict_pending() && handles[8].active(),
+                require((*editor).conflict_pending() && handles[6].active(),
                         "Native conflict choice owns an active dialog");
                 (*editor).execute("conflict-over");
                 (*editor).execute("conflict-review");
@@ -408,13 +382,13 @@ public:
                 context_press.button = gf::PointerButton::secondary;
                 context_press.position = {bounds.x + 56 + 144 + 12, bounds.y + 68 + 12};
                 (*grid).on_pointer(context_press);
-                require((*grid).context_menu.read().is_open(), "Native cell context menu opens");
-                const std::vector<gf::MenuItemSpec> &items = (*grid).context_menu.read().items();
+                require((*grid).context_menu().is_open(), "Native cell context menu opens");
+                const std::vector<gf::MenuItemSpec> &items = (*grid).context_menu().items();
                 require(items.size() == 1 && items[0].text == "Convert to Value",
                         "Native cell menu exposes conversion");
                 const bool converted = (*items[0].command).execute("csv.context");
                 require(converted, "Native cell context command admits conversion");
-                (*grid).context_menu.read().close();
+                (*grid).context_menu().close();
                 csv_submitted_at = std::chrono::steady_clock::now();
                 break;
             }
@@ -500,9 +474,9 @@ public:
     void run() {
         editor = gf::make_control<notepad::Editor>(gf::StableId("native.editor"));
         std::vector<gf::ApplicationWindow> windows = (*editor).application_windows(path);
-        require(windows.size() == handles.size(), "Expected main and eight owned dialogs");
+        require(windows.size() == handles.size(), "Expected main and six owned dialogs");
         main = windows.front().model.get();
-        find_window = windows[3].model.get();
+        find_window = windows[1].model.get();
         for (std::size_t i = 0; i < windows.size(); ++i) {
             hooks[i].ready = std::move(windows[i].options.ready);
             hooks[i].closing = std::move(windows[i].options.closing);
@@ -510,7 +484,10 @@ public:
             windows[i].options.closing = ClosingListener{this, i};
             windows[i].options.initially_visible = i == 0;
         }
-        const gf::ApplicationResult result = gf::Application::run(std::move(windows));
+        gf::ApplicationCreateResult created = gf::Application::create(gf::ApplicationConfig{});
+        if (!created)
+            throw std::runtime_error("Cannot create the application.");
+        const gf::ApplicationResult result = (*created.application).run(std::move(windows));
         tick = {};
         timer.reset();
         if (result.callback_exception)

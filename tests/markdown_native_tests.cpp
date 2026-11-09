@@ -83,7 +83,10 @@ public:
         entry.options.ready = Ready{this};
         std::vector<gf::ApplicationWindow> windows{};
         windows.push_back(std::move(entry));
-        const gf::ApplicationResult result = gf::Application::run(std::move(windows));
+        gf::ApplicationCreateResult created = gf::Application::create(gf::ApplicationConfig{});
+        if (!created)
+            throw std::runtime_error("Cannot create the application.");
+        const gf::ApplicationResult result = (*created.application).run(std::move(windows));
         subscription_ = {};
         timer_.reset();
         view_.reset();

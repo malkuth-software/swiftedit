@@ -33,8 +33,7 @@ def windows_libraries(executables: list[Path], destination: Path, sdk: Path) -> 
     if tool is None:
         raise RuntimeError('objdump is required for dependency inspection')
     system: Path = Path(os.environ['WINDIR']) / 'System32'
-    directories: list[Path] = [executables[0].parent, sdk / 'gui-forms-sdk/bin',
-                               sdk / 'picker-sdk/bin', Path(tool).parent, system]
+    directories: list[Path] = [executables[0].parent, sdk / 'gui-forms-sdk/bin', Path(tool).parent, system]
     pending: list[Path] = list(executables)
     seen: set[str] = set()
     while pending:
@@ -152,7 +151,7 @@ def main() -> None:
     shutil.copytree('third_party/md4c', root / 'licenses/MD4C', ignore=shutil.ignore_patterns('*.c', '*.h'))
     shutil.copy2('third_party/unicode/LICENSE.txt', root / 'licenses/Unicode.txt')
     component: str
-    for component in ['gui-forms-sdk', 'picker-sdk', 'stx-rtf2md-sdk']:
+    for component in ['gui-forms-sdk']:
         notices: Path = sdk / component / 'share/licenses'
         if notices.is_dir():
             shutil.copytree(notices, root / 'licenses' / component)

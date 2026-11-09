@@ -53,7 +53,7 @@ struct MarkdownView::LayoutWork {
     std::vector<double> x{}, row_y{}, line_height{};
 };
 MarkdownView::~MarkdownView() = default;
-MarkdownView::MarkdownView(gf::StableId id) : Control(std::move(id)) { set_focusable(true); }
+MarkdownView::MarkdownView(gf::StableId id) : Control(std::move(id)) { focusable = true; }
 void MarkdownView::align_line(std::vector<Run> &next, std::size_t first, double left, double right, double end,
                               swiftedit::MarkdownAlignment alignment) {
     if (alignment == swiftedit::MarkdownAlignment::left || first >= next.size())

@@ -4,4 +4,4 @@
 # tools/prepare_dependencies.py refuses a mismatch.
 [harness]
 repository = "malkuth-software/template_harness"
-commit = "523c2a7a7f36d1ae06e82fa031f56599e25d3e18"
+commit = "1833da37037f3ac9c1fd33a12c3c6198b329a613"

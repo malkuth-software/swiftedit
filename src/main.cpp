@@ -3,6 +3,8 @@
 #include "new_window.hpp"
 #include "swiftedit_theme.hpp"     // generated from themes/swiftedit
 #include <iostream>
+#include <string>
+#include <string_view>
 #ifdef _WIN32
 #include <windows.h>
 #include <shellapi.h>
@@ -31,14 +33,20 @@ struct NativeArguments {
 int main(int argc, char **argv) {
     try {
         std::filesystem::path initial{};
+        // --screenshots <dir>: the screenshot run (src/screenshots.cpp).
+        std::filesystem::path screenshots{};
 #ifdef _WIN32
         static_cast<void>(argc);
         static_cast<void>(argv);
         const NativeArguments arguments{};
-        if (arguments.count > 1)
+        if (arguments.count > 2 && std::wstring_view(arguments.values[1]) == L"--screenshots")
+            screenshots = std::filesystem::absolute(arguments.values[2]);
+        else if (arguments.count > 1)
             initial = std::filesystem::absolute(arguments.values[1]);
 #else
-        if (argc > 1)
+        if (argc > 2 && std::string_view(argv[1]) == "--screenshots")
+            screenshots = std::filesystem::absolute(argv[2]);
+        else if (argc > 1)
             initial = std::filesystem::absolute(argv[1]);
 #endif
         // The application first: its theme (the GUI.Forms base, then
@@ -50,8 +58,7 @@ int main(int argc, char **argv) {
         if (!created) {
             for (const gui_forms::ThemeCompileDiagnostic &finding : created.findings)
                 std::cerr << "SwiftEdit theme: " << finding.code << ' ' << finding.file << ':'
-                          << finding.line << ':' << finding.column << ' ' << finding.detail << '
-';
+                          << finding.line << ':' << finding.column << ' ' << finding.detail << '\n';
             throw std::runtime_error("Cannot create the application.");
         }
         int exit_code = 1;
@@ -62,12 +69,18 @@ int main(int argc, char **argv) {
             std::unique_ptr<swiftedit::MainWindow> window = std::make_unique<swiftedit::MainWindow>(application);
             const std::shared_ptr<notepad::Editor> editor = (*window).notepad_editor;
             (*editor).set_new_window(notepad::NewWindow{notepad::executable_path()});
+            if (!screenshots.empty())
+                (*editor).set_screenshot_directory(screenshots);
             std::vector<gui_forms::ApplicationWindow> windows =
                 (*editor).application_windows(std::move(window), initial);
             const gui_forms::ApplicationResult result = application.run(std::move(windows));
             if (result.callback_exception)
                 std::rethrow_exception(result.callback_exception);
             exit_code = result.accepted() ? 0 : 1;
+            for (const std::string &failure : (*editor).screenshot_failures()) {
+                std::cerr << "SwiftEdit screenshot: " << failure << '\n';
+                exit_code = 2;
+            }
         }
         // Once, after the last run: ends the rendering library for the process.
         const gui_forms::ApplicationResult ended = gui_forms::Application::shutdown();

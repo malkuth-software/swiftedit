@@ -37,7 +37,7 @@ def sha256(path: Path) -> str:
 # The sanitized configuration, matching GUI.Forms' sanitizer trees
 # (template_harness ci_build_steps.py): AddressSanitizer and
 # UndefinedBehaviorSanitizer on SwiftEdit's own code, every report fatal,
-# line tables only. The installed GUI.Forms, picker and stx_rtf2md packages
+# line tables only. The installed GUI.Forms and stx_rtf2md packages
 # are not instrumented; their code runs unchecked but their allocations are
 # still tracked. LeakSanitizer runs where AddressSanitizer carries it (Linux
 # and macOS; the MinGW runtime on Windows has none), with SwiftEdit's
@@ -104,7 +104,6 @@ def main() -> None:
     prefix: str
     if lockstep:
         if (manifest.get('dependency_mode') != 'lockstep-installed-prefix'
-                or manifest['picker_revision'] != dependencies['picker_revision']
                 or manifest['platform'] != arguments.platform):
             raise RuntimeError('The lockstep packages differ from the dependency lock; run prepare_dependencies.py')
         gui = Path(manifest['gui_forms_prefix'])
@@ -114,10 +113,9 @@ def main() -> None:
         if manifest['llvm_runtime']:
             os.environ['GUI_FORMS_LLVM_RUNTIME'] = manifest['llvm_runtime']
         # The lockstep prefix carries stx_rtf2md beside GUI.Forms.
-        prefix = str(gui) + ';' + str(sdk / 'picker-sdk')
+        prefix = str(gui)
     else:
         if (manifest['provider_revision'] != dependencies['revision']
-                or manifest['picker_revision'] != dependencies['picker_revision']
                 or manifest.get('stx_rtf2md_revision') != dependencies['revision']
                 or manifest['platform'] != arguments.platform):
             raise RuntimeError('Installed packages differ from the dependency lock')
@@ -127,7 +125,8 @@ def main() -> None:
         os.environ['CCACHE_DIR'] = str(Path('.ccache').resolve())
         if arguments.platform == 'macos-arm64':
             os.environ['GUI_FORMS_LLVM_RUNTIME'] = str(Path('.build/toolchain/llvm-22.1.8-macos14').resolve())
-        prefix = str(gui) + ';' + str(sdk / 'picker-sdk') + ';' + str(sdk / 'stx-rtf2md-sdk')
+        # The SDK prefix carries the stx packages beside GUI.Forms.
+        prefix = str(gui)
     lock: dict = {'provider_revision': manifest['provider_revision']}
     os.environ['PATH'] = str(gui / 'bin') + os.pathsep + os.environ['PATH']
     os.environ['CCACHE_BASEDIR'] = str(Path('.').resolve())

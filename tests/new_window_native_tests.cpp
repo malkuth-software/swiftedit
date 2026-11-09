@@ -2,6 +2,7 @@
 #include "native_font_check.hpp"
 #include "new_window.hpp"
 #include "platform.hpp"
+#include <stdexcept>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -69,7 +70,10 @@ public:
             windows[index].options.ready = Ready{this, index};
             windows[index].options.closing = Closing{this, index};
         }
-        const gf::ApplicationResult result = gf::Application::run(std::move(windows));
+        gf::ApplicationCreateResult created = gf::Application::create(gf::ApplicationConfig{});
+        if (!created)
+            throw std::runtime_error("Cannot create the application.");
+        const gf::ApplicationResult result = (*created.application).run(std::move(windows));
         subscription_ = {};
         timer_.reset();
         if (failure_)

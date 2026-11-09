@@ -16,11 +16,12 @@
 // F8 and Shift+F8 through diagnostics, and Escape in the find field returns
 // to the text.
 //
-// Syntax colours: the style runs (style_runs) are computed for any window of
-// the text, but the stock TextBox paints one style, so they are not yet drawn
-// in the text itself. They wait for a styled-run capability in GUI.Forms; the
-// overview strip and the status line show diagnostics and rules meanwhile.
+// Syntax colours, rules, diagnostics and search matches are drawn in the
+// text through GUI.Forms' styled text runs (StylePainter, one decoration
+// layer of the text box), repainted whenever the text or a layer changes; the
+// overview strip and the status line show diagnostics and rules too.
 #include "code_editor/marker_strip.hpp"
+#include "code_editor/style_painter.hpp"
 #include "highlight/code_document.hpp"
 #include <gui_forms/gui_forms.hpp>
 #include <memory>
@@ -152,10 +153,14 @@ private:
     void select(highlight::ByteRange range);
     void select_search_match(std::size_t index);
     [[nodiscard]] highlight::ByteOffset caret() const;
+    // The overview strip, then the box's styled runs (refresh_styles).
     void refresh_markers();
+    // Repaints syntax, rules, diagnostics and search matches on the box.
+    void refresh_styles();
     void refresh_status();
 
     highlight::CodeDocument document_;
+    StylePainter painter_{};
     std::vector<CodeDiagnostic> diagnostics_{};
     std::string saved_text_{};
     bool command_bar_visible_{true};

@@ -35,7 +35,7 @@ std::weak_ptr<CodeEditor> CodeEditor::observe() {
 }
 
 std::shared_ptr<gf::Button> CodeEditor::make_bar_button(const char *id, const char *label, BarAction action) {
-    std::shared_ptr<gf::Button> button = gf::make_control<gf::Button>(gf::StableId(id));
+    std::shared_ptr<gf::Button> button = gf::make_control<gf::Button>(gf::StableId(std::string_view(id)));
     (*button).text = label;
     add_child(button);
     subscriptions_.push_back((*button).clicked().subscribe(*this, BarListener{observe(), action}));
@@ -175,6 +175,7 @@ std::string CodeEditor::text() const {
 
 void CodeEditor::set_language(const hl::Language &language) {
     document_.set_language(language);
+    refresh_styles();
     refresh_status();
 }
 
@@ -214,7 +215,6 @@ void CodeEditor::select(hl::ByteRange range) {
 void CodeEditor::set_rule_offsets(std::span<const hl::ByteOffset> offsets) {
     document_.set_rule_offsets(offsets);
     refresh_markers();
-    invalidate(gf::Dirty::paint);
 }
 
 void CodeEditor::clear_rules() {
@@ -269,13 +269,14 @@ bool CodeEditor::go_to_next_rule() {
 
 std::size_t CodeEditor::find(std::string_view needle, bool match_case) {
     const std::size_t count = document_.search(needle, match_case);
+    refresh_styles();
     refresh_status();
-    invalidate(gf::Dirty::paint);
     return count;
 }
 
 void CodeEditor::select_search_match(std::size_t index) {
     document_.set_current_match(index);
+    refresh_styles();
     select(document_.matches().items()[index].range);
     refresh_status();
 }
@@ -335,6 +336,12 @@ void CodeEditor::style_runs(hl::ByteRange window, std::vector<hl::StyleRun> &run
 void CodeEditor::refresh_markers() {
     document_.line_markers(marker_scratch_);
     (*markers_).set_markers(marker_scratch_, document_.highlighter().line_count());
+    refresh_styles();
+}
+
+void CodeEditor::refresh_styles() {
+    if (text_)
+        painter_.paint(document_, *text_);
 }
 
 // The status line: the caret's place, then the diagnostic under the caret (or

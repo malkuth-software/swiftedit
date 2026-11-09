@@ -5,6 +5,7 @@
 #include "markdown_view.hpp"
 #include "query_field.hpp"
 #include "character_picker.hpp"
+#include "code_editor/style_painter.hpp"
 #include "highlight/code_document.hpp"
 #include <functional>
 #include <gui_forms/application.hpp>
@@ -59,6 +60,14 @@ public:
     void execute(const std::string &command);
     // Same entrypoints are used by the shell and deterministic consumer tests.
     void open_file(const std::filesystem::path &source);
+    // The screenshot run (src/screenshots.cpp; main's --screenshots <dir>):
+    // set before the run starts; once the main window is ready the editor
+    // opens sample documents written into `directory`, writes
+    // swiftedit_<state>.png there after each has painted, and closes.
+    void set_screenshot_directory(std::filesystem::path directory);
+    [[nodiscard]] const std::vector<std::string> &screenshot_failures() const {
+        return screenshot_failures_;
+    }
     std::shared_ptr<gf::TextBox> text_control() const { return text_; }
     // The syntax model mirroring the document text: its language follows the
     // opened file's extension until the Language menu chooses another.
@@ -146,6 +155,10 @@ private:
         std::weak_ptr<Editor> owner{};
         void operator()(gf::FrameTime) const;
     };
+    struct ScreenshotTick {
+        std::weak_ptr<Editor> owner{};
+        void operator()(gf::FrameTime) const;
+    };
     struct ImportSummaryTick {
         std::weak_ptr<Editor> owner{};
         void operator()(gf::FrameTime) const;
@@ -194,6 +207,10 @@ private:
     };
     gf::MenuItemSpec item(std::string id, std::string label, std::string shortcut = {});
     void ready(gf::Window &, gf::ApplicationWindowHandle, const std::filesystem::path &);
+    void start_screenshots();
+    // One step of the screenshot run; false when it is over.
+    bool screenshot_step();
+    void capture_screenshot(const char *state);
     void closing(gf::HostCloseRequest &);
     void refresh();
     void refresh_title(std::string_view content);
@@ -293,6 +310,8 @@ private:
     std::string status_format_{};
     // The highlighter's model of the document text, brought in step by refresh.
     swiftedit::highlight::CodeDocument code_{swiftedit::highlight::language_named("plain")};
+    // Draws code_'s syntax colours in the text box (refresh, choose_language).
+    swiftedit::StylePainter styles_{};
     void choose_language(const swiftedit::highlight::Language &language);
     bool selection_metadata_current_{};
     struct FindWork {
@@ -307,6 +326,12 @@ private:
     };
     std::unique_ptr<FindWork> search_{};
     gf::FrameRequestToken search_frame_{};
+    // The screenshot run: where it writes, its next step, what failed and
+    // its timer. Empty directory: no run.
+    std::filesystem::path screenshot_directory_{};
+    std::size_t screenshot_next_{};
+    std::vector<std::string> screenshot_failures_{};
+    gf::FrameRequestToken screenshot_frame_{};
 };
 std::string path_utf8(const std::filesystem::path &);
 } // namespace notepad

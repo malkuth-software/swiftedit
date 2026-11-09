@@ -1,9 +1,7 @@
 {
   "repository": "malkuth-software/gui_forms",
-  "revision": "2d0f52006a5d1f8ce98a2191c841052b2dd500b7",
-  "picker_repository": "malkuth-software/file_manager",
-  "picker_revision": "028a3f969709cac88611369b81653889391fe21a",
-  "pin_note": "revision is malkuth-software/gui_forms checkpoint/2026-11-08-cp22 2d0f5200 (GUI.Forms 0.5: Application-first, form documents, theme packages, property cells). SwiftEdit builds its SDK, the standalone stx_rtf2md package and, with File Manager 028a3f96, the document picker from that one checkout. cache_sha256 are the digests of its build-<revision> compiler-cache assets; the values below are still 8e288666's and must be regenerated once cp22's cache assets are published. Its tools forward to template_harness, which prepare_dependencies.py checks out at template_harness/ at the commit harness.lock pins; that pin must equal gui_forms/harness.lock.",
+  "revision": "ffbdc2a775a9289eef142d131db3c91bac36faac",
+  "pin_note": "revision is malkuth-software/gui_forms checkpoint/2026-11-09-cp25 ffbdc2a7 (GUI.Forms 0.5 with styled text runs, TextDecorations, and the public SHA-256). SwiftEdit builds the GUI.Forms SDK with its own tools/build_sdk.py --features all; the stx packages (stx_rtf2md among them) come from stx at GUI.Forms' stx.lock commit and install into the same prefix. cache_sha256 are the digests of its build-<revision> compiler-cache assets; the values below are still 8e288666's and must be regenerated once cp25's cache assets are published. Its tools forward to template_harness, which prepare_dependencies.py checks out at template_harness/ at the commit harness.lock pins; that pin must equal gui_forms/harness.lock.",
   "cache_sha256": {
     "windows-x64": "8daf6985595b87c2a987d951a6287cd6308491be80c1899d092e67e6156d434c",
     "linux-x64": "0ce5913dbe0f56668ae92f9f5956c78094596774643c3c27e467be4192717dfa",

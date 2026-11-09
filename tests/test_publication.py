@@ -44,7 +44,7 @@ class PublicationTests(unittest.TestCase):
             binary.write_bytes(b'fixture payload')
             binary.with_name(binary.name + '.sha256').write_text(digest(binary) + '  ' + binary.name + '\n')
         manifest: dict = {'source_revision': 'a' * 40, 'release_version': '0.3.50',
-            'sdk': {'provider_revision': 'toolkit', 'picker_revision': 'picker', 'platform': 'windows-x64'},
+            'sdk': {'provider_revision': 'toolkit', 'platform': 'windows-x64'},
             'installer': {'filename': installer.name, 'version': '0.3.50',
                           'sha256': digest(installer), 'validation': 'installed startup passed'}}
         path: Path = root / 'windows-x64-manifest.json'
@@ -53,7 +53,7 @@ class PublicationTests(unittest.TestCase):
 
     def check(self, root: Path) -> list[Path]:
         return checked_files(root, 'windows-x64', 'a' * 40, '0.3.50',
-                             {'revision': 'toolkit', 'picker_revision': 'picker'}, True)
+                             {'revision': 'toolkit'}, True)
 
     def test_complete_release_and_tampered_installer(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

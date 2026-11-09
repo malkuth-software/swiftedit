@@ -191,11 +191,63 @@ void verify_diagnostics_and_rules() {
 
 } // namespace
 
+void verify_styled_runs() {
+    const std::shared_ptr<swiftedit::CodeEditor> editor =
+        gf::make_control<swiftedit::CodeEditor>(gf::StableId("tests.code.styles"));
+    gf::Window window(editor, {720, 420});
+    window.perform_layout();
+    (*editor).load(sheet, "light.theme.css");
+    gf::TextBox &text = *(*editor).text_control();
+    const swiftedit::StylePalette &palette = swiftedit::default_style_palette();
+    std::vector<gf::StyledTextRun> runs{};
+    // ":root" is a pseudo selector; "button" (line 2) a type selector.
+    text.styled_runs(gf::Utf8Range{gf::Utf8Offset(0U), gf::Utf8Offset(5U)}, runs);
+    const std::size_t pseudo = static_cast<std::size_t>(hl::TokenKind::pseudo_selector);
+    check(!runs.empty() && runs[0].style.foreground == palette.syntax[pseudo],
+          "Syntax colours reach the text box as styled runs");
+    const std::size_t button = std::string_view(sheet).find("button");
+    text.styled_runs(gf::Utf8Range{gf::Utf8Offset(button), gf::Utf8Offset(button + 6U)}, runs);
+    const std::size_t type = static_cast<std::size_t>(hl::TokenKind::type_selector);
+    check(runs.size() == 1U && runs[0].style.foreground == palette.syntax[type], "A type selector's colour");
+
+    // Search matches get a ground, and the current match a stronger one.
+    check((*editor).find("button", true) == 1U, "One match");
+    text.styled_runs(gf::Utf8Range{gf::Utf8Offset(button), gf::Utf8Offset(button + 6U)}, runs);
+    check(runs.size() == 1U && runs[0].style.background == palette.search_ground, "A match has a ground");
+    check((*editor).find_next(), "The match is selected");
+    text.styled_runs(gf::Utf8Range{gf::Utf8Offset(button), gf::Utf8Offset(button + 6U)}, runs);
+    check(runs.size() == 1U && runs[0].style.background == palette.search_current_ground,
+          "The current match has the stronger ground");
+    static_cast<void>((*editor).find("", true));
+
+    // Diagnostics are squiggles; edits keep the styles in step.
+    std::vector<swiftedit::CodeDiagnostic> diagnostics(1U);
+    diagnostics[0].place.position = hl::SourcePosition{3U, 9U};
+    diagnostics[0].place.severity = hl::DiagnosticSeverity::error;
+    diagnostics[0].message = "E1";
+    (*editor).set_diagnostics(diagnostics, hl::ColumnUnit::unicode_scalar);
+    const std::size_t colr = std::string_view(sheet).find("colr");
+    text.styled_runs(gf::Utf8Range{gf::Utf8Offset(colr), gf::Utf8Offset(colr + 4U)}, runs);
+    check(!runs.empty() && runs[0].style.underline == gf::TextUnderline::squiggle &&
+              runs[0].style.underline_color == palette.error_underline,
+          "An error is a squiggle");
+    text.select(gf::Utf8Offset(0U), gf::Utf8Offset(0U));
+    text.replace_selection("/* c */\n");
+    text.styled_runs(gf::Utf8Range{gf::Utf8Offset(0U), gf::Utf8Offset(7U)}, runs);
+    const std::size_t comment = static_cast<std::size_t>(hl::TokenKind::comment);
+    check(runs.size() == 1U && runs[0].style.foreground == palette.syntax[comment], "An edit is highlighted");
+
+    // Plain text carries no styles.
+    (*editor).load("plain words", "notes.txt");
+    check(text.decorations().empty(), "Plain text is not decorated");
+}
+
 int main() {
     try {
         verify_loading_and_edits();
         verify_keys_and_search();
         verify_diagnostics_and_rules();
+        verify_styled_runs();
         std::cout << "Code editor tests passed\n";
         return 0;
     } catch (const std::exception &failure) {

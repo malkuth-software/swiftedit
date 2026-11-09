@@ -1,8 +1,6 @@
 param(
     [string]$Toolchain = $(if ($env:SWIFTEDIT_TOOLCHAIN) { $env:SWIFTEDIT_TOOLCHAIN } else { Split-Path (Get-Command clang -ErrorAction Stop).Source }),
     [string]$GuiSdk = (Join-Path $PSScriptRoot '../.build/native-windows-x64/sdk/gui-forms-sdk'),
-    [string]$PickerSdk = (Join-Path $PSScriptRoot '../.build/native-windows-x64/sdk/picker-sdk'),
-    [string]$StxSdk = (Join-Path $PSScriptRoot '../.build/native-windows-x64/sdk/stx-rtf2md-sdk'),
     [string]$BuildDirectory = '',
     [string]$StageDirectory = '',
     [switch]$NativeTests
@@ -11,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $build = if ($BuildDirectory) { [IO.Path]::GetFullPath($BuildDirectory) } else { Join-Path $repo '.build/native-windows-x64/app' }
 $stage = if ($StageDirectory) { [IO.Path]::GetFullPath($StageDirectory) } else { Join-Path $repo 'dist/SwiftEdit' }
-$env:PATH = "$Toolchain;$GuiSdk/bin;$PickerSdk/bin;$env:PATH"
+$env:PATH = "$Toolchain;$GuiSdk/bin;$env:PATH"
 function Assert-NotRunning([string]$directory) {
     $prefix = [IO.Path]::GetFullPath($directory).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
     foreach ($process in (Get-CimInstance Win32_Process -Filter "Name = 'notepad.exe' OR Name = 'SwiftEdit.exe' OR Name = 'swiftedit-cli.exe' OR Name = 'swiftedit-session-tests.exe' OR Name = 'notepad-native-tests.exe' OR Name = 'notepad-editor-tests.exe'")) {
@@ -21,7 +19,7 @@ function Assert-NotRunning([string]$directory) {
     }
 }
 function Get-SdkFingerprint {
-    $roots = @("$GuiSdk/include", "$GuiSdk/lib", "$GuiSdk/bin", "$PickerSdk/include", "$PickerSdk/lib", "$StxSdk/include", "$StxSdk/lib")
+    $roots = @("$GuiSdk/include", "$GuiSdk/lib", "$GuiSdk/bin")
     $lines = [System.Collections.Generic.List[string]]::new()
     foreach ($root in $roots) {
         $files = @(Get-ChildItem -LiteralPath $root -Recurse -File | Sort-Object FullName)
@@ -52,7 +50,7 @@ try {
     $sdkFingerprint = Get-SdkFingerprint
     $stamp = Join-Path $build 'sdk-fingerprint.txt'
     $nativeFlag = if ($NativeTests) { 'ON' } else { 'OFF' }
-    & "$Toolchain/cmake.exe" -S $repo -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release '-DNOTEPAD_BUILD_UI=ON' "-DNOTEPAD_NATIVE_TESTS=$nativeFlag" "-DCMAKE_PREFIX_PATH=$GuiSdk;$PickerSdk;$StxSdk" "-DCMAKE_TOOLCHAIN_FILE=$repo/gui_forms/cmake/llvm22.cmake" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+    & "$Toolchain/cmake.exe" -S $repo -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release '-DNOTEPAD_BUILD_UI=ON' "-DNOTEPAD_NATIVE_TESTS=$nativeFlag" "-DCMAKE_PREFIX_PATH=$GuiSdk" "-DCMAKE_TOOLCHAIN_FILE=$repo/gui_forms/cmake/llvm22.cmake" -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
     if ($LASTEXITCODE) { throw 'Configure failed' }
     & "$Toolchain/cmake.exe" --build $build --parallel 2
     if ($LASTEXITCODE) { throw 'Build failed' }
@@ -70,7 +68,7 @@ try {
     New-Item -ItemType Directory -Path $licenseStage -Force | Out-Null
     Copy-Item -LiteralPath "$repo/third_party/unicode/LICENSE.txt" -Destination (Join-Path $licenseStage 'Unicode.txt') -Force
     Copy-Item -LiteralPath "$repo/third_party/md4c/LICENSE.md" -Destination (Join-Path $licenseStage 'MD4C.md') -Force
-    foreach ($package in @($GuiSdk, $PickerSdk, $StxSdk)) {
+    foreach ($package in @($GuiSdk)) {
         $noticeRoot = Join-Path $package 'share/licenses'
         foreach ($notice in (Get-ChildItem -LiteralPath $noticeRoot -Directory)) {
             Copy-Item -LiteralPath $notice.FullName -Destination $licenseStage -Recurse -Force
@@ -98,7 +96,7 @@ try {
             $unseen = $seen.Add($name)
             if (-not $unseen) { continue }
             $dependency = $null
-            foreach ($dir in @("$GuiSdk/bin", "$PickerSdk/bin", $Toolchain)) {
+            foreach ($dir in @("$GuiSdk/bin", $Toolchain)) {
                 $candidate = Join-Path $dir $name
                 if (Test-Path -LiteralPath $candidate) { $dependency = $candidate; break }
             }

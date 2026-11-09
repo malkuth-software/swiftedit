@@ -28,6 +28,7 @@ target_compile_features(swiftedit_highlight PUBLIC cxx_std_20)
 add_library(swiftedit_code_editor STATIC
   "${SWIFTEDIT_SOURCE_ROOT}/src/code_editor/code_editor.cpp"
   "${SWIFTEDIT_SOURCE_ROOT}/src/code_editor/marker_strip.cpp"
+  "${SWIFTEDIT_SOURCE_ROOT}/src/code_editor/style_painter.cpp"
   "${SWIFTEDIT_SOURCE_ROOT}/src/code_editor/theme_bridge.cpp")
 target_compile_definitions(swiftedit_code_editor PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(swiftedit_code_editor PUBLIC swiftedit_highlight GUIForms::Application)

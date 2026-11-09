@@ -19,8 +19,7 @@ def checked_files(source: Path, platform: str, revision: str, version: str,
     if manifest['source_revision'] != revision or manifest.get('release_version') != version:
         raise RuntimeError('Mixed source/version in release: ' + platform)
     sdk: dict = manifest['sdk']
-    if (sdk['provider_revision'] != dependencies['revision']
-            or sdk['picker_revision'] != dependencies['picker_revision'] or sdk['platform'] != platform):
+    if sdk['provider_revision'] != dependencies['revision'] or sdk['platform'] != platform:
         raise RuntimeError('Unexpected dependencies in release: ' + platform)
     binaries: list[Path] = [archive]
     if installers:

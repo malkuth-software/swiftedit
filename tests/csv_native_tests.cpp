@@ -59,7 +59,10 @@ public:
         entry.options.ready = Ready{this};
         std::vector<gf::ApplicationWindow> windows{};
         windows.push_back(std::move(entry));
-        const gf::ApplicationResult result = gf::Application::run(std::move(windows));
+        gf::ApplicationCreateResult created = gf::Application::create(gf::ApplicationConfig{});
+        if (!created)
+            throw std::runtime_error("Cannot create the application.");
+        const gf::ApplicationResult result = (*created.application).run(std::move(windows));
         subscription_ = {};
         timer_.reset();
         view_.reset();
@@ -146,7 +149,7 @@ private:
             const bool up = (*window_).dispatch_key({gf::KeyAction::down, gf::PhysicalKey::up});
             const std::chrono::duration<double, std::milli> input = gf::FrameClock::now() - input_start;
             maximum_input_ms_ = std::max(maximum_input_ms_, input.count());
-            if (!down || !up || (*view_).selected.read().row != 0)
+            if (!down || !up || (*view_).selected().row != 0)
                 throw std::runtime_error("Native CSV routed navigation failed during calculation.");
             const std::chrono::duration<double, std::milli> elapsed = now - stress_started_;
             const gf::MetricsSnapshot activity = (*window_).metrics().snapshot();

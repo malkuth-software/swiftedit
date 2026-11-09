@@ -1,26 +1,10 @@
-/* SwiftEdit's theme, over the GUI.Forms base. Colour roles are declared
-   here and used by name, so forced high contrast can replace them.
+/* SwiftEdit's theme, over the GUI.Forms base. GUI.Forms 0.5 names a
+   closed set of colour roles, so this sheet uses the base roles by name
+   and forced high contrast can still replace them.
 
-   The syntax roles name what the highlighter finds (src/highlight); a text
-   control that paints styled runs reads them by the token kind's role
-   name. Until GUI.Forms' text controls paint styled runs, only the status
-   lines (class status-line: the editor's and the code editor's) use this
-   sheet; the controls are made in code, so classes name them, not IDs. */
-:root {
-  status-ink-on-face: #1b2733 on #e5eaef;
-  syntax-comment: #5c6b77 on #ffffff;
-  syntax-string: #8a3b12 on #ffffff;
-  syntax-number: #0b5d73 on #ffffff;
-  syntax-colour: #0b5d73 on #ffffff;
-  syntax-keyword: #6a2c91 on #ffffff;
-  syntax-at-rule: #6a2c91 on #ffffff;
-  syntax-selector: #19528b on #ffffff;
-  syntax-property: #1d5e2f on #ffffff;
-  syntax-custom-property: #1d5e2f on #ffffff;
-  syntax-function: #7a4b00 on #ffffff;
-  syntax-invalid: #a4161a on #ffffff;
-  diagnostic-error: #a4161a on #ffffff;
-  diagnostic-warning: #7a4b00 on #ffffff;
-}
-
-.status-line { color: role(status-ink-on-face); }
+   The syntax colours the code editor paints as styled runs are not roles:
+   GUI.Forms has no custom roles, so StylePalette (src/code_editor/
+   style_painter.hpp) carries them. Only the status lines (class
+   status-line: the editor's and the code editor's) use this sheet; the
+   controls are made in code, so classes name them, not IDs. */
+.status-line { color: role(ink-on-chrome); }

@@ -403,19 +403,19 @@ void verify_csv_page_navigation() {
     key.physical_key = gf::PhysicalKey::page_down;
     key.modifiers = gf::Modifier::shift;
     (*grid).on_key(key);
-    check(key.handled && (*grid).selected.read().row == 3 && (*grid).selected.read().column == 1,
+    check(key.handled && (*grid).selected().row == 3 && (*grid).selected().column == 1,
           "CSV Page Down moves by the visible row count");
     check((*grid).copy_cells() == "b\r\ne\r\nh\r\nk", "Shift Page Down retains the rectangle anchor");
     key.physical_key = gf::PhysicalKey::page_up;
     key.modifiers = gf::Modifier::none;
     (*grid).on_key(key);
-    check((*grid).selected.read().row == 0 && (*grid).copy_cells() == "b", "Page Up returns and collapses selection");
+    check((*grid).selected().row == 0 && (*grid).copy_cells() == "b", "Page Up returns and collapses selection");
     key.physical_key = gf::PhysicalKey::end;
     (*grid).on_key(key);
-    check((*grid).selected.read().column == 2, "End reaches the last cell in this row");
+    check((*grid).selected().column == 2, "End reaches the last cell in this row");
     key.modifiers = gf::Modifier::meta;
     (*grid).on_key(key);
-    check((*grid).selected.read().row == 8 && (*grid).selected.read().column == 2, "Cmd End reaches final existing cell");
+    check((*grid).selected().row == 8 && (*grid).selected().column == 2, "Cmd End reaches final existing cell");
     // LLVM/PE leaf HScrollBar/VScrollBar RTTI is not canonical across the DLL.
     // Inspect the exported behavioral interface and verify its orientation.
     const std::shared_ptr<gf::ScrollBar> vertical =
@@ -432,11 +432,11 @@ void verify_csv_page_navigation() {
     key.physical_key = gf::PhysicalKey::page_up;
     key.modifiers = gf::Modifier::none;
     (*grid).on_key(key);
-    check((*grid).selected.read().row == 5 && (*grid).selected.read().column == 0, "Page navigation clamps to a ragged row's real cells");
+    check((*grid).selected().row == 5 && (*grid).selected().column == 0, "Page navigation clamps to a ragged row's real cells");
     key.physical_key = gf::PhysicalKey::home;
     key.modifiers = gf::Modifier::control;
     (*grid).on_key(key);
-    check((*grid).selected.read().row == 0 && (*grid).selected.read().column == 0, "Ctrl Home reaches the first cell");
+    check((*grid).selected().row == 0 && (*grid).selected().column == 0, "Ctrl Home reaches the first cell");
 }
 void verify_markdown_preparation() {
     const std::shared_ptr<notepad::MarkdownView> view =
@@ -698,7 +698,7 @@ int main() {
             (*grid).on_key(right);
             check(right.handled, "CSV arrow navigation handled");
         }
-        check((*grid).selected.read() == swiftedit::CellAddress{0, 5} && (*horizontal).value.read() == 1,
+        check((*grid).selected() == swiftedit::CellAddress{0, 5} && (*horizontal).value.read() == 1,
               "Selecting the partially visible sixth cell scrolls it fully into view");
         (*grid).select_cell({0, 7});
         check((*horizontal).value.read() == 3, "Explicit cell selection also reveals its whole column");
