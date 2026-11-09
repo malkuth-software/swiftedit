@@ -1,0 +1,7 @@
+{
+  "format": "gui-forms-theme/1",
+  "name": "swiftedit",
+  "version": "1.0.0",
+  "engine": ">=0.3",
+  "sheet": {"path": "swiftedit.theme.css", "sha256": "d64d1de42b3524fc2fe667368fa3d51069b935dbc87b3477faa6f4d6b95f6675"}
+}

@@ -20,7 +20,8 @@ target_include_directories(swiftedit_md4c PUBLIC third_party/md4c)
 # and the CSS outline. It depends on no GUI.Forms header, so the theme editor
 # and the command tools can link it alone.
 add_library(swiftedit_highlight STATIC src/highlight/language.cpp src/highlight/css_language.cpp
-  src/highlight/highlighter.cpp src/highlight/decorations.cpp src/highlight/css_outline.cpp)
+  src/highlight/highlighter.cpp src/highlight/decorations.cpp src/highlight/css_outline.cpp
+  src/highlight/code_document.cpp)
 target_include_directories(swiftedit_highlight PUBLIC src)
 add_executable(swiftedit-highlight-tests tests/highlight_tests.cpp)
 target_link_libraries(swiftedit-highlight-tests PRIVATE swiftedit_highlight)
@@ -28,6 +29,20 @@ add_test(NAME highlight COMMAND swiftedit-highlight-tests)
 add_executable(swiftedit-decoration-tests tests/decoration_tests.cpp)
 target_link_libraries(swiftedit-decoration-tests PRIVATE swiftedit_highlight)
 add_test(NAME decorations COMMAND swiftedit-decoration-tests)
+add_executable(swiftedit-code-document-tests tests/code_document_tests.cpp)
+target_link_libraries(swiftedit-code-document-tests PRIVATE swiftedit_highlight)
+add_test(NAME code-document COMMAND swiftedit-code-document-tests)
+# The embeddable code editor (the theme editor's text pane): the highlighter
+# under a GUI.Forms control, its overview strip, and the theme engine bridge.
+# Linked against Application's shared Core, as the editor is.
+add_library(swiftedit_code_editor STATIC src/code_editor/code_editor.cpp src/code_editor/marker_strip.cpp
+  src/code_editor/theme_bridge.cpp)
+target_include_directories(swiftedit_code_editor PUBLIC src)
+target_compile_definitions(swiftedit_code_editor PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(swiftedit_code_editor PUBLIC swiftedit_highlight GUIForms::Application)
+add_executable(swiftedit-code-editor-tests tests/code_editor_tests.cpp)
+target_link_libraries(swiftedit-code-editor-tests PRIVATE swiftedit_code_editor)
+add_test(NAME code-editor COMMAND swiftedit-code-editor-tests)
 if(WIN32)
   set(SWIFTEDIT_FILE_SOURCES src/file_windows.cpp src/paged_windows.cpp)
 elseif(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -226,6 +241,13 @@ if(NOTEPAD_BUILD_UI)
     add_executable(notepad WIN32 src/main.cpp)
   endif()
   set_target_properties(notepad PROPERTIES OUTPUT_NAME SwiftEdit)
+  # The main window is a form document, generated into swiftedit::MainWindow;
+  # the editor control it holds is an application type. The theme package is
+  # embedded and checked against the form.
+  gui_forms_add_form(notepad forms/main_window.form CLASS MainWindow NAMESPACE swiftedit DERIVED
+                     TYPES "swiftedit_editor,notepad::Editor,user_control,editor.hpp")
+  gui_forms_add_theme(notepad themes/swiftedit FUNCTION swiftedit_theme NAMESPACE swiftedit
+                      FORMS forms/main_window.form)
   target_link_libraries(notepad PRIVATE notepad_ui swiftedit_window_launch)
   if(WIN32)
     target_link_libraries(notepad PRIVATE shell32)

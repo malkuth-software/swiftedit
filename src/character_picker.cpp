@@ -10,18 +10,18 @@ void CharacterPicker::initialize_control_tree() {
         gf::StableId("characters.heading"),
         controls_ ? "Control characters — select one to see its purpose. Preview labels are inert."
                   : "Unicode characters — browse pages or enter a code point such as U+1F600.");
-    (*heading_).set_text_wrapping(gf::TextWrapping::word);
+    (*heading_).text_wrapping = gf::TextWrapping::word;
     codepoint_ = gf::make_control<gf::TextBox>(gf::StableId("characters.codepoint"), "U+0020");
-    (*codepoint_).set_maximum_length(8);
-    (*codepoint_).set_accessible_name("Unicode code point in hexadecimal");
+    (*codepoint_).maximum_length = 8;
+    (*codepoint_).accessible_name = "Unicode code point in hexadecimal";
     list_ = gf::make_control<gf::ListBox>(gf::StableId("characters.list"));
-    (*list_).set_accessible_name(controls_ ? "Control characters" : "Unicode character page");
+    (*list_).accessible_name = controls_ ? "Control characters" : "Unicode character page";
     glyph_ = gf::make_control<gf::Label>(gf::StableId("characters.glyph"));
-    (*glyph_).set_font({gf::FontRole::content, 24, 400, false});
-    (*glyph_).set_use_mnemonic(false);
+    (*glyph_).font = gf::FontSpec{gf::FontRole::content, 24, 400, false};
+    (*glyph_).use_mnemonic = false;
     detail_ = gf::make_control<gf::Label>(gf::StableId("characters.detail"));
-    (*detail_).set_text_wrapping(gf::TextWrapping::word);
-    (*detail_).set_use_mnemonic(false);
+    (*detail_).text_wrapping = gf::TextWrapping::word;
+    (*detail_).use_mnemonic = false;
     previous_ = gf::make_control<gf::Button>(gf::StableId("characters.previous"), "Previous page");
     next_ = gf::make_control<gf::Button>(gf::StableId("characters.next"), "Next page");
     go_ = gf::make_control<gf::Button>(gf::StableId("characters.go"), "Go");
@@ -77,7 +77,7 @@ void CharacterPicker::Click::operator()(gf::ButtonBase &) const {
     try {
         (*self).action(action);
     } catch (const std::exception &failure) {
-        (*(*self).detail_).set_text(failure.what());
+        (*(*self).detail_).text = failure.what();
     }
 }
 void CharacterPicker::Selection::operator()(const gf::ListSelectionChange &) const {
@@ -94,17 +94,17 @@ void CharacterPicker::load_page(char32_t first) {
         labels.push_back(swiftedit::codepoint_label(info.scalar) + "  " + info.name);
     rows_ = std::move(rows);
     page_ = first;
-    (*list_).set_items(std::move(labels));
-    (*previous_).set_enabled(!controls_ && page_ > 0);
-    (*next_).set_enabled(!controls_ && page_ < 0x10ff00);
-    (*insert_).set_enabled(!rows_.empty());
-    (*copy_).set_enabled(!rows_.empty());
+    (*list_).items = std::move(labels);
+    (*previous_).enabled = !controls_ && page_ > 0;
+    (*next_).enabled = !controls_ && page_ < 0x10ff00;
+    (*insert_).enabled = !rows_.empty();
+    (*copy_).enabled = !rows_.empty();
     if (!rows_.empty())
         (*list_).select_index(0);
     else {
-        (*glyph_).set_text("");
-        (*detail_).set_text("No assigned ordinary characters on this page. Enter another code "
-                            "point or browse the next page.");
+        (*glyph_).text = "";
+        (*detail_).text = "No assigned ordinary characters on this page. Enter another code "
+                            "point or browse the next page.";
     }
 }
 swiftedit::CharacterInfo CharacterPicker::selected_info() const {
@@ -118,9 +118,9 @@ void CharacterPicker::update_selection() {
         return;
     const swiftedit::CharacterInfo info = selected_info();
     const std::string label = swiftedit::codepoint_label(info.scalar);
-    (*codepoint_).set_text(label);
-    (*glyph_).set_text(info.control ? "[" + label + "]" : swiftedit::character_utf8(info.scalar));
-    (*detail_).set_text(label + " " + info.name + "\n" + info.explanation);
+    (*codepoint_).text = label;
+    (*glyph_).text = info.control ? "[" + label + "]" : swiftedit::character_utf8(info.scalar);
+    (*detail_).text = label + " " + info.name + "\n" + info.explanation;
 }
 void CharacterPicker::select_codepoint(char32_t scalar) {
     const swiftedit::CharacterInfo info = swiftedit::character_info(scalar);
@@ -167,7 +167,7 @@ void CharacterPicker::action(Action requested) {
             load_page(page_ + 256);
         break;
     case Action::go: {
-        const char32_t scalar = swiftedit::parse_codepoint((*codepoint_).text());
+        const char32_t scalar = swiftedit::parse_codepoint((*codepoint_).text.read());
         select_codepoint(scalar);
         break;
     }

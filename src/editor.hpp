@@ -5,6 +5,7 @@
 #include "markdown_view.hpp"
 #include "query_field.hpp"
 #include "character_picker.hpp"
+#include "highlight/code_document.hpp"
 #include <file_manager/document_picker_view.hpp>
 #include <functional>
 #include <gui_forms/application.hpp>
@@ -41,13 +42,28 @@ public:
     void initialize_control_tree();
     void arrange(gf::Rect bounds) override;
     void on_paint(gf::Painter &, gf::Rect) override;
-    void on_frame(gf::FrameTime) override;
+    // Advances pending search or replacement work by one slice. SearchTick
+    // calls it on the UI timer; tests call it to step the work.
+    void on_frame(gf::FrameTime);
     bool search_pending() const { return static_cast<bool>(search_); }
+    // The main window (a plain window over this editor) and the dialogs it
+    // owns, for Application::run.
     std::vector<gf::ApplicationWindow> application_windows(const std::filesystem::path &initial);
+    // As above with `main` as the main window: a window whose root is this
+    // editor (the generated swiftedit::MainWindow). Refused with
+    // std::invalid_argument when `main` is null or shows another root.
+    std::vector<gf::ApplicationWindow> application_windows(std::unique_ptr<gf::Window> main,
+                                                           const std::filesystem::path &initial);
     void execute(const std::string &command);
     // Same entrypoints are used by the shell and deterministic consumer tests.
     void open_file(const std::filesystem::path &source);
     std::shared_ptr<gf::TextBox> text_control() const { return text_; }
+    // The syntax model mirroring the document text: its language follows the
+    // opened file's extension until the Language menu chooses another.
+    const swiftedit::highlight::CodeDocument &code_document() const { return code_; }
+    // Sets the program a "New Window" command starts; a window made from the
+    // form gets it after construction. It must not retain the editor.
+    void set_new_window(std::function<void()> new_window) { new_window_ = std::move(new_window); }
     const Document &document() const { return document_; }
     std::shared_ptr<CsvView> csv_control() const { return csv_; }
     std::shared_ptr<QueryField> query_control() const { return query_; }
@@ -125,6 +141,10 @@ private:
     struct PostedClose {
         std::weak_ptr<Editor> owner{};
         void operator()() const;
+    };
+    struct SearchTick {
+        std::weak_ptr<Editor> owner{};
+        void operator()(gf::FrameTime) const;
     };
     struct ImportSummaryTick {
         std::weak_ptr<Editor> owner{};
@@ -218,6 +238,7 @@ private:
     void show_find();
     void find_next();
     void advance_search();
+    void schedule_search();
     void advance_replacement();
     void cancel_search();
     void replace_one();
@@ -278,6 +299,9 @@ private:
     gf::TextStore counted_text_{};
     std::size_t character_count_{};
     std::string status_format_{};
+    // The highlighter's model of the document text, brought in step by refresh.
+    swiftedit::highlight::CodeDocument code_{swiftedit::highlight::language_named("plain")};
+    void choose_language(const swiftedit::highlight::Language &language);
     bool selection_metadata_current_{};
     struct FindWork {
         std::unique_ptr<swiftedit::PatternScan> scan{};

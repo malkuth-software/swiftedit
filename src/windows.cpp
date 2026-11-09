@@ -1,6 +1,7 @@
 #include "editor.hpp"
 #include "session.hpp"
 #include "user_paths.hpp"
+#include <stdexcept>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -106,11 +107,19 @@ void Editor::add_dialog(std::vector<gf::ApplicationWindow> &windows, Dialog &dia
 }
 std::vector<gf::ApplicationWindow>
 Editor::application_windows(const std::filesystem::path &initial) {
-    std::vector<gf::ApplicationWindow> result{};
     const std::shared_ptr<Editor> self = std::static_pointer_cast<Editor>(shared_from_this());
+    std::unique_ptr<gf::Window> window = std::make_unique<gf::Window>(self, gf::Size{940, 660});
+    std::vector<gf::ApplicationWindow> result = application_windows(std::move(window), initial);
+    return result;
+}
+std::vector<gf::ApplicationWindow>
+Editor::application_windows(std::unique_ptr<gf::Window> window, const std::filesystem::path &initial) {
+    if (!window || (*window).root().get() != this)
+        throw std::invalid_argument("The main window must show this editor.");
+    std::vector<gf::ApplicationWindow> result{};
     gf::ApplicationWindow main{};
     main.stable_id = "notepad.main";
-    main.model = std::make_unique<gf::Window>(self, gf::Size{940, 660});
+    main.model = std::move(window);
     main.options.title = "Untitled - SwiftEdit";
     main.options.initial_size = {940, 660};
     main.options.minimum_size = {540, 320};
@@ -216,7 +225,7 @@ void Editor::insert_character(const std::string &value) {
     if (picker_active_ || pending_save_ || conflict_review_)
         throw std::runtime_error("Finish the file dialog before inserting a character.");
     const gf::TextSelection selection = (*text_).selection();
-    std::string candidate((*text_).text());
+    std::string candidate((*text_).text.read());
     candidate.replace(selection.start().value(), selection.length(), value);
     if (gf::TextBox::validate_multiline_text(candidate) != gf::TextBox::MultilineValidation::valid)
         throw std::runtime_error("Character insertion exceeds the current document or line limit.");
@@ -239,7 +248,7 @@ void Editor::show_picker(bool save_as) {
         static_cast<void>((*picker.view)
                               .controller()
                               .set_filename(document_.path.empty()
-                                                ? swiftedit::suggested_name((*text_).text())
+                                                ? swiftedit::suggested_name((*text_).text.read())
                                                 : path_utf8(document_.path.filename())));
     (*picker.view).present(start);
     (*picker.view).attach_dialog(*picker.window);
@@ -250,11 +259,11 @@ void Editor::show_picker(bool save_as) {
     static_cast<void>(controls_.handle.hide());
     picker_active_ = true;
     active_save_picker_ = save_as;
-    set_enabled(false);
+    enabled = false;
     const gf::HostServiceStatus status = picker.handle.show();
     if (!status.accepted()) {
         picker_active_ = false;
-        set_enabled(true);
+        enabled = true;
         after_save_ = Continuation::none;
         throw std::runtime_error("The file picker could not be shown.");
     }
@@ -263,7 +272,7 @@ void Editor::hide_picker(bool save_as) {
     Picker &picker = save_as ? save_picker_ : open_picker_;
     static_cast<void>(picker.handle.hide());
     picker_active_ = false;
-    set_enabled(true);
+    enabled = true;
     focus_text();
 }
 void Editor::picker_result(bool save_as, const file_manager::DocumentPickerResult &result) {

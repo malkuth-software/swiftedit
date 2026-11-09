@@ -146,7 +146,7 @@ private:
             const bool up = (*window_).dispatch_key({gf::KeyAction::down, gf::PhysicalKey::up});
             const std::chrono::duration<double, std::milli> input = gf::FrameClock::now() - input_start;
             maximum_input_ms_ = std::max(maximum_input_ms_, input.count());
-            if (!down || !up || (*view_).selected().row != 0)
+            if (!down || !up || (*view_).selected.read().row != 0)
                 throw std::runtime_error("Native CSV routed navigation failed during calculation.");
             const std::chrono::duration<double, std::milli> elapsed = now - stress_started_;
             const gf::MetricsSnapshot activity = (*window_).metrics().snapshot();

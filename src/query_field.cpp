@@ -5,13 +5,13 @@
 
 namespace notepad {
 QueryField::QueryField(gf::StableId id) : Control(std::move(id)) {
-    set_focusable(true);
-    set_accessible_name("Find what; right-click or Control-question to toggle a wildcard");
+    focusable = true;
+    accessible_name = "Find what; right-click or Control-question to toggle a wildcard";
 }
 void QueryField::initialize_control_tree() {
     edit_ = gf::make_control<gf::TextBox>(gf::StableId("query.editing"));
-    (*edit_).set_maximum_length(4096);
-    (*edit_).set_visible(false);
+    (*edit_).maximum_length = 4096;
+    (*edit_).visible = false;
     add_child(edit_);
 }
 void QueryField::on_dispose() noexcept {
@@ -41,7 +41,7 @@ void QueryField::restore(const Snapshot &value) {
     }
     for (std::size_t index = 0; index < slots.size() && index < value.flags.size(); ++index)
         slots[index].wildcard = value.flags[index];
-    (*edit_).set_text(value.text);
+    (*edit_).text = value.text;
     (*edit_).select(value.selection.anchor, value.selection.caret);
     (*edit_).clear_undo_history();
     store_ = std::move(next);
@@ -81,7 +81,7 @@ void QueryField::set_text(std::string value) {
 }
 std::string_view QueryField::text() const { return store_.utf8(); }
 void QueryField::synchronize(const Snapshot &before, bool backward, bool deletion, bool replacement) {
-    const std::string value((*edit_).text());
+    const std::string value((*edit_).text.read());
     (*edit_).clear_undo_history();
     if (value == before.text && !replacement)
         return;
