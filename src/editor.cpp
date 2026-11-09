@@ -111,7 +111,7 @@ void Editor::continue_operation(Continuation next) {
         focus_text();
         break;
     case Continuation::open_document:
-        show_picker(false);
+        choose_file(false);
         break;
     case Continuation::close_window:
         close_authorized_ = true;
@@ -455,9 +455,7 @@ void Editor::show_markdown(bool show) {
 }
 gf::HostDialogChoice Editor::message(std::string title, std::string text,
                                      gf::HostMessageButtons buttons) {
-    gf::Window *owner = picker_active_
-                            ? (active_save_picker_ ? save_picker_.window : open_picker_.window)
-                            : window();
+    gf::Window *owner = window();
     if (!owner || !(*owner).host_services())
         throw std::runtime_error("No dialog service is attached.");
     gf::HostMessageDialogRequest payload{};
@@ -470,9 +468,7 @@ gf::HostDialogChoice Editor::message(std::string title, std::string text,
                                  : gf::HostDialogChoice::cancel;
     gf::HostDialogRequest request{};
     request.request_id = dialog_sequence_++;
-    request.owner_id = picker_active_
-                           ? (active_save_picker_ ? "notepad.save-picker" : "notepad.open-picker")
-                           : "notepad.main";
+    request.owner_id = "notepad.main";
     request.payload = std::move(payload);
     const gf::HostDialogResult result = (*(*owner).host_services()).show_dialog(request);
     if (!result.status.accepted())
@@ -600,7 +596,7 @@ bool Editor::save_to(const std::filesystem::path &path, const FileSnapshot &expe
 void Editor::save(bool save_as, Continuation continuation) {
     if (save_as || document_.path.empty()) {
         after_save_ = continuation;
-        show_picker(true);
+        choose_file(true);
     } else {
         static_cast<void>(request_save_to(document_.path, document_.snapshot, continuation));
     }
@@ -628,7 +624,7 @@ void Editor::execute(const std::string &id) {
             finish_save_choice(false, true);
         return;
     }
-    if (picker_active_)
+    if (file_dialog_active_)
         return;
     try {
         const bool source_search = id == "find" || id == "replace" || id == "find-next" ||
@@ -886,7 +882,7 @@ void Editor::ready(gf::Window &w, gf::ApplicationWindowHandle handle,
 void Editor::closing(gf::HostCloseRequest &request) {
     if (close_authorized_)
         return;
-    if (picker_active_ || pending_save_ || conflict_review_) {
+    if (file_dialog_active_ || pending_save_ || conflict_review_) {
         request.cancel = true;
         return;
     }

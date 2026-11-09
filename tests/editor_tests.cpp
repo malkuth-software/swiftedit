@@ -5,10 +5,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include <variant>
 #include "platform.hpp"
-#ifdef _WIN32
-#include <winioctl.h>
-#endif
 
 namespace gf = gui_forms;
 void settle_csv(notepad::CsvView &grid) {
@@ -34,6 +32,10 @@ public:
     std::string clipboard{};
     int dialogs{};
     std::string last_message{};
+    // UTF-8 paths the next file dialogs return; empty means cancel.
+    std::deque<std::string> paths{};
+    gf::HostOpenFileDialogRequest last_open{};
+    gf::HostSaveFileDialogRequest last_save{};
 
 protected:
     gf::HostMonitorResult query_monitors_impl() override { return {}; }
@@ -52,6 +54,23 @@ protected:
     }
     gf::HostDialogResult show_dialog_impl(const gf::HostDialogRequest &request) override {
         ++dialogs;
+        // File dialogs answer with the next queued path, or cancel.
+        const bool open = std::holds_alternative<gf::HostOpenFileDialogRequest>(request.payload);
+        const bool save = std::holds_alternative<gf::HostSaveFileDialogRequest>(request.payload);
+        if (open || save) {
+            if (open)
+                last_open = std::get<gf::HostOpenFileDialogRequest>(request.payload);
+            else
+                last_save = std::get<gf::HostSaveFileDialogRequest>(request.payload);
+            gf::HostPathDialogResult chosen{};
+            if (!paths.empty()) {
+                chosen.outcome = gf::HostDialogOutcome::accepted;
+                chosen.paths.push_back(paths.front());
+                paths.pop_front();
+            }
+            const gf::HostDialogResult result{{}, request.request_id, chosen};
+            return result;
+        }
         const gf::HostMessageDialogRequest &message =
             std::get<gf::HostMessageDialogRequest>(request.payload);
         last_message = message.message;
@@ -410,46 +429,19 @@ void verify_csv_keyboard_commands() {
         }
     }
 }
-void verify_picker_home() {
-    const std::filesystem::path home = notepad::user_home_directory();
-    const std::filesystem::path initial =
-        std::filesystem::canonical(std::filesystem::temp_directory_path()) / "unopened.txt";
-    const std::u8string home_utf8 = home.u8string();
-    const std::string expected(reinterpret_cast<const char *>(home_utf8.data()), home_utf8.size());
-    for (const bool named : {false, true}) {
-        const std::shared_ptr<notepad::Editor> editor =
-            gf::make_control<notepad::Editor>(gf::StableId("home.editor"));
-        const std::filesystem::path start = named ? initial : std::filesystem::path{};
-        std::vector<gf::ApplicationWindow> windows = (*editor).application_windows(start);
-        std::size_t checked = 0;
-        for (gf::ApplicationWindow &entry : windows) {
-            if (entry.stable_id != "notepad.open-picker" &&
-                entry.stable_id != "notepad.save-picker")
-                continue;
-            gf::Window &window = *entry.model;
-            entry.options.ready(window, {});
-            window.perform_layout();
-            const std::shared_ptr<gf::TextBox> path =
-                std::dynamic_pointer_cast<gf::TextBox>(window.find("file-manager.picker.path"));
-            const std::shared_ptr<gf::Button> home_button =
-                std::dynamic_pointer_cast<gf::Button>(window.find("file-manager.picker.root"));
-            check(path && home_button, "Picker exposes path and Home controls");
-            if (!named)
-                check((*path).text.read() == expected, "Untitled picker starts in user home, not cwd");
-            const bool clicked = (*home_button).perform_click();
-            check(clicked && (*path).text.read() == expected,
-                  "Open and Save picker Home resolves user home independently of document folder");
-            ++checked;
-        }
-        check(checked == 2, "Both picker profiles checked");
-    }
+// Open and Save As use GUI.Forms' host file dialogs: an untitled document
+// starts in the user's home, a titled one in its folder; a choice opens or
+// saves the file; a cancel changes nothing.
+std::string utf8_of(const std::filesystem::path &path) {
+    const std::u8string bytes = path.u8string();
+    const std::string result(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+    return result;
 }
-void verify_picker_directory_links() {
-    // The owner's Mac regression must execute real links, never skip them.
+void verify_file_dialogs() {
     const std::filesystem::path directory =
         std::filesystem::canonical(std::filesystem::temp_directory_path()) /
-        ("swiftedit-picker-links-" + std::to_string(test_process_id()));
-    check(std::filesystem::create_directory(directory), "Unique picker link fixture");
+        ("swiftedit-file-dialogs-" + std::to_string(test_process_id()));
+    check(std::filesystem::create_directory(directory), "Own file dialog fixture");
     struct Cleanup {
         std::filesystem::path directory{};
         ~Cleanup() {
@@ -457,43 +449,50 @@ void verify_picker_directory_links() {
             std::filesystem::remove_all(directory, ignored);
         }
     } cleanup{directory};
-    const std::filesystem::path target = directory / "target";
-    const std::filesystem::path alias = directory / "alias";
-    check(std::filesystem::create_directory(target), "Create picker target directory");
-    std::filesystem::create_directory_symlink(target, alias);
-    const std::u8string alias_utf8 = alias.u8string();
-    const std::u8string target_utf8 = target.u8string();
-    const std::u8string home_utf8 = notepad::user_home_directory().u8string();
-    const std::string alias_text(reinterpret_cast<const char *>(alias_utf8.data()),
-                                 alias_utf8.size());
-    const std::string expected(reinterpret_cast<const char *>(target_utf8.data()),
-                               target_utf8.size());
-    const std::string expected_home(reinterpret_cast<const char *>(home_utf8.data()),
-                                    home_utf8.size());
+    const std::filesystem::path source = directory / "sheet.theme.css";
+    static_cast<void>(notepad::write_file(source, "a { b: c; }\n", {}));
     const std::shared_ptr<notepad::Editor> editor =
-        gf::make_control<notepad::Editor>(gf::StableId("links.editor"));
+        gf::make_control<notepad::Editor>(gf::StableId("file-dialogs.editor"));
     std::vector<gf::ApplicationWindow> windows = (*editor).application_windows({});
-    std::size_t checked = 0;
-    for (gf::ApplicationWindow &entry : windows) {
-        if (entry.stable_id != "notepad.open-picker" && entry.stable_id != "notepad.save-picker")
-            continue;
-        gf::Window &window = *entry.model;
-        entry.options.ready(window, {});
-        window.perform_layout();
-        const std::shared_ptr<gf::TextBox> path =
-            std::dynamic_pointer_cast<gf::TextBox>(window.find("file-manager.picker.path"));
-        const std::shared_ptr<gf::Button> home =
-            std::dynamic_pointer_cast<gf::Button>(window.find("file-manager.picker.root"));
-        check(path && home, "Picker navigation controls exist");
-        (*path).text = alias_text;
-        check(window.request_focus(path), "Focus picker path entry");
-        window.dispatch_key({gf::KeyAction::down, gf::PhysicalKey::enter});
-        check((*path).text.read() == expected, "Open and Save path entry follows directory link");
-        check((*home).perform_click() && (*path).text.read() == expected_home,
-              "Home after link navigation still returns to the real user home");
-        ++checked;
-    }
-    check(checked == 2, "Both consumer picker profiles navigate a real directory link");
+    check(windows.front().stable_id == "notepad.main", "The main window comes first");
+    for (const gf::ApplicationWindow &entry : windows)
+        check(entry.stable_id.find("picker") == std::string::npos, "No picker windows remain");
+    gf::Window &window = *windows.front().model;
+    TestServices services{};
+    gf::HostSession host(window, capabilities(), &services);
+    const gf::HostDispatchResult attached = host.dispatch({1, 0, gf::HostAttachEvent{{800, 600}, 1}});
+    check(attached.accepted(), "File dialog host attached");
+    windows.front().options.ready(window, {});
+    window.perform_layout();
+
+    (*editor).execute("open");
+    check(services.last_open.initial_directory == utf8_of(std::filesystem::canonical(notepad::user_home_directory())),
+          "An untitled document opens from the user's home");
+    check(!services.last_open.filters.empty() && !services.last_open.allow_multiple,
+          "Open offers the filters and one file");
+    check((*editor).document().path.empty(), "A cancelled Open changes nothing");
+
+    services.paths.push_back(utf8_of(source));
+    (*editor).execute("open");
+    check((*editor).document().path == source && (*(*editor).text_control()).text.read() == "a { b: c; }\n",
+          "The chosen file opens");
+    check((*editor).code_document().language().name() == "css", "Its extension chooses the language");
+
+    const std::filesystem::path copy = directory / "copy.css";
+    services.paths.push_back(utf8_of(copy));
+    (*editor).execute("save-as");
+    check(services.last_save.initial_directory == utf8_of(directory) &&
+              services.last_save.suggested_name == "sheet.theme.css" && !services.last_save.confirm_overwrite,
+          "Save As starts in the document's folder with its name; the editor confirms overwrites itself");
+    check(notepad::read_file(copy).bytes == "a { b: c; }\n" && (*editor).document().path == copy,
+          "Save As writes the chosen file");
+
+    services.paths.push_back(utf8_of(source));
+    services.choices.push_back(gf::HostDialogChoice::no);
+    (*(*editor).text_control()).text = "changed\n";
+    (*editor).execute("save-as");
+    check(notepad::read_file(source).bytes == "a { b: c; }\n" && services.last_message.find("Replace") == 0U,
+          "Declining the overwrite keeps the existing file");
 }
 void verify_callback_revocation() {
     std::shared_ptr<notepad::Editor> editor =
@@ -540,122 +539,6 @@ void verify_callback_revocation() {
     gf::HostCloseRequest expired_close{};
     retained_closing(expired_close);
     check(!expired_close.cancel, "Retained closing callback ignores destroyed editor");
-}
-// Explicit adoption probe: invoke with --picker-file-links after installing the
-// corrected public picker SDK. The currently pinned SDK does not support this.
-#ifdef _WIN32
-std::vector<unsigned char> file_link_data(const std::filesystem::path &path) {
-    const HANDLE handle = CreateFileW(path.c_str(), 0,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-        FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-    check(handle != INVALID_HANDLE_VALUE, "Open fixture reparse point");
-    struct Close {
-        HANDLE handle{};
-        ~Close() { CloseHandle(handle); }
-    } close{handle};
-    FILE_ATTRIBUTE_TAG_INFO tag{};
-    check(GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &tag, sizeof(tag)) != 0 &&
-              tag.ReparseTag == IO_REPARSE_TAG_SYMLINK,
-          "Fixture remains a native symbolic link");
-    std::vector<unsigned char> bytes(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
-    DWORD count = 0;
-    check(DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, nullptr, 0, bytes.data(),
-                          static_cast<DWORD>(bytes.size()), &count, nullptr) != 0,
-          "Read fixture symbolic-link target data");
-    bytes.resize(count);
-    return bytes;
-}
-#endif
-void verify_picker_file_links() {
-    const std::filesystem::path directory =
-        std::filesystem::canonical(std::filesystem::temp_directory_path()) /
-        ("swiftedit-picker-file-links-" + std::to_string(test_process_id()));
-    check(std::filesystem::create_directory(directory), "Unique file-link fixture");
-    struct Cleanup {
-        std::filesystem::path directory{};
-        ~Cleanup() {
-            std::error_code ignored{};
-            std::filesystem::remove_all(directory, ignored);
-        }
-    } cleanup{directory};
-    check(std::filesystem::create_directory(directory / "target"), "Create target directory");
-    const std::filesystem::path target = directory / "target" / "document.txt";
-    const std::filesystem::path alias = directory / "linked.txt";
-    const notepad::FileSnapshot initial = notepad::write_file(target, "linked original\n", {});
-    check(initial.exists, "Create linked document");
-    const std::filesystem::path relative_target = std::filesystem::path("target") / "document.txt";
-#ifdef _WIN32
-    // MinGW's std::filesystem implementation can omit symlink creation even
-    // when Windows supports it. Both attempts create a real file symlink.
-    bool linked = CreateSymbolicLinkW(alias.c_str(), relative_target.c_str(),
-                                     SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != 0;
-    if (!linked)
-        linked = CreateSymbolicLinkW(alias.c_str(), relative_target.c_str(), 0) != 0;
-    if (!linked) {
-        const DWORD error = GetLastError();
-        throw std::runtime_error("Cannot create file-link fixture: Windows error " +
-                                 std::to_string(error));
-    }
-    const std::vector<unsigned char> original_link = file_link_data(alias);
-#else
-    std::filesystem::create_symlink(relative_target, alias);
-#endif
-    const std::shared_ptr<notepad::Editor> editor =
-        gf::make_control<notepad::Editor>(gf::StableId("file-links.editor"));
-    std::vector<gf::ApplicationWindow> windows = (*editor).application_windows({});
-    gf::Window *picker = nullptr;
-    for (gf::ApplicationWindow &entry : windows) {
-        if (entry.stable_id == "notepad.main" || entry.stable_id == "notepad.open-picker") {
-            entry.options.ready(*entry.model, {});
-            (*entry.model).perform_layout();
-        }
-        if (entry.stable_id == "notepad.open-picker")
-            picker = entry.model.get();
-    }
-    check(picker != nullptr, "Open picker exists");
-    gf::Window &window = *picker;
-    const std::shared_ptr<gf::TextBox> path =
-        std::dynamic_pointer_cast<gf::TextBox>(window.find("file-manager.picker.path"));
-    const std::shared_ptr<gf::ObjectView> objects =
-        std::dynamic_pointer_cast<gf::ObjectView>(window.find("file-manager.picker.objects"));
-    const std::shared_ptr<gf::Button> accept =
-        std::dynamic_pointer_cast<gf::Button>(window.find("file-manager.picker.accept"));
-    check(path && objects && accept, "Open picker controls exist");
-    (*path).text = notepad::path_utf8(directory);
-    check(window.request_focus(path), "Focus file-link directory path");
-    window.dispatch_key({gf::KeyAction::down, gf::PhysicalKey::enter});
-    std::string id{};
-    bool enabled = false;
-    for (const gf::ObjectViewItem &item : (*objects).items()) {
-        if (item.name == "linked.txt") {
-            id = item.stable_id;
-            enabled = item.enabled;
-        }
-    }
-    check(!id.empty() && enabled, "Relative file symlink is selectable");
-    (*objects).set_selected_ids({id});
-    check((*accept).perform_click(), "Activate Open on linked file");
-    gf::TextBox &text = *(*editor).text_control();
-    check(text.text.read() == "linked original\n" && (*editor).document().path == target,
-          "Picker opens resolved target in SwiftEdit");
-    text.select_all();
-    text.replace_selection("linked revised\n");
-    (*editor).execute("save");
-    const notepad::FileSnapshot saved = notepad::read_file(target);
-    check(saved.bytes == "linked revised\n" && !(*editor).document().dirty(text.text.read()),
-          "Save updates the resolved target");
-#ifdef _WIN32
-    check(file_link_data(alias) == original_link,
-          "Save preserves the exact native symlink target and flags");
-    std::ifstream through_alias(alias, std::ios::binary);
-    std::string alias_line{};
-    std::getline(through_alias, alias_line);
-    check(alias_line == "linked revised" && through_alias.peek() == std::char_traits<char>::eof(),
-          "Preserved alias reads the saved target contents");
-#else
-    check(std::filesystem::is_symlink(alias), "Save preserves the symbolic link");
-    check(std::filesystem::canonical(alias) == target, "Preserved link resolves to target");
-#endif
 }
 void verify_grapheme_status() {
     const std::shared_ptr<notepad::Editor> editor =
@@ -875,13 +758,8 @@ void verify_query_occurrence_history() {
           "Refused oversized insertion does not add undo history");
     host.shutdown();
 }
-int main(const int argc, char **const argv) {
+int main() {
     try {
-        if (argc == 2 && std::string_view(argv[1]) == "--picker-file-links") {
-            verify_picker_file_links();
-            std::cout << "Picker file-link open/edit/save probe passed\n";
-            return 0;
-        }
         verify_view_menu_state();
         verify_language_menu();
         verify_document_scrollbars();
@@ -889,10 +767,7 @@ int main(const int argc, char **const argv) {
         verify_callback_revocation();
         verify_file_shortcuts();
         verify_startup_rtf_summary();
-        verify_picker_home();
-#ifndef _WIN32
-        verify_picker_directory_links();
-#endif
+        verify_file_dialogs();
         verify_csv_keyboard_commands();
         verify_conflict_fields();
         verify_grapheme_status();

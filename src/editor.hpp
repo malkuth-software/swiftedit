@@ -6,7 +6,6 @@
 #include "query_field.hpp"
 #include "character_picker.hpp"
 #include "highlight/code_document.hpp"
-#include <file_manager/document_picker_view.hpp>
 #include <functional>
 #include <gui_forms/application.hpp>
 #include <gui_forms/gui_forms.hpp>
@@ -36,6 +35,9 @@ private:
 };
 class Editor final : public gf::Control {
 public:
+    // The file dialogs' filter, in Windows Forms' "label|patterns" form.
+    static constexpr std::string_view file_dialog_filter =
+        "All files|*.*|Text documents|*.txt;*.log;*.ini;*.cfg;*.md|Theme sheets and forms|*.css;*.form";
     explicit Editor(gf::StableId id, std::function<void()> new_window = {});
     ~Editor() override;
     static constexpr bool initialize_tree_after_construction = true;
@@ -83,8 +85,6 @@ private:
     enum class Continuation { none, new_document, open_document, close_window };
     enum class WindowKind {
         main,
-        open_picker,
-        save_picker,
         find,
         font,
         characters,
@@ -161,11 +161,6 @@ private:
         WindowKind kind{WindowKind::main};
         void operator()(gf::HostCloseRequest &) const;
     };
-    struct PickerListener {
-        std::weak_ptr<Editor> owner{};
-        bool save_as{};
-        void operator()(const file_manager::DocumentPickerResult &) const;
-    };
     struct CharacterInsert {
         std::weak_ptr<Editor> owner{};
         void operator()(const std::string &) const;
@@ -192,11 +187,6 @@ private:
                                                   ButtonAction);
     void add_dialog(std::vector<gf::ApplicationWindow> &, Dialog &, WindowKind, const char *,
                     const char *, gf::Size);
-    struct Picker {
-        std::unique_ptr<file_manager::DocumentPickerView> view{};
-        gf::Window *window{};
-        gf::ApplicationWindowHandle handle{};
-    };
     struct Dialog {
         std::shared_ptr<DialogLayout> root{};
         gf::Window *window{};
@@ -232,9 +222,9 @@ private:
     void conflict_action(ButtonAction);
     void cancel_conflict();
     swiftedit::DocumentStamp save_stamp() const;
-    void show_picker(bool save_as);
-    void picker_result(bool save_as, const file_manager::DocumentPickerResult &);
-    void hide_picker(bool save_as);
+    // Shows the Open or Save As dialog modally and acts on the choice.
+    void choose_file(bool save_as);
+    void file_chosen(bool save_as, const std::filesystem::path &path);
     void show_find();
     void find_next();
     void advance_search();
@@ -260,7 +250,9 @@ private:
     std::vector<gf::SubscriptionToken> subscriptions_{};
     std::vector<gf::AcceleratorToken> accelerators_{};
     gf::ApplicationWindowHandle handle_{};
-    Picker open_picker_{}, save_picker_{};
+    // Made on first use and reused, so later choices keep their state.
+    std::unique_ptr<gf::OpenFileDialog> open_dialog_{};
+    std::unique_ptr<gf::SaveFileDialog> save_dialog_{};
     Dialog find_{}, font_{};
     Dialog conflict_{};
     std::unique_ptr<swiftedit::SaveReview> conflict_review_{};
@@ -292,7 +284,7 @@ private:
     std::shared_ptr<gf::Button> find_next_button_{}, find_close_{}, font_apply_{}, font_close_{};
     std::shared_ptr<gf::ComboBox> font_role_{}, font_size_{};
     std::shared_ptr<gf::CheckBox> font_bold_{}, font_italic_{};
-    bool show_status_{true}, picker_active_{}, active_save_picker_{}, close_authorized_{};
+    bool show_status_{true}, file_dialog_active_{}, close_authorized_{};
     std::uint64_t dialog_sequence_{1};
     Continuation after_save_{Continuation::none};
     // UI-thread-owned Unicode metadata, reused across selection-only refreshes.
