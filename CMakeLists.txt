@@ -16,6 +16,18 @@ find_package(GUIForms 0.2 CONFIG REQUIRED COMPONENTS Application)
 find_package(stx_rtf2md 0.1 CONFIG REQUIRED)
 add_library(swiftedit_md4c STATIC third_party/md4c/md4c.c third_party/md4c/entity.c)
 target_include_directories(swiftedit_md4c PUBLIC third_party/md4c)
+# The syntax highlighter: languages, incremental line lexing, decorations
+# and the CSS outline. It depends on no GUI.Forms header, so the theme editor
+# and the command tools can link it alone.
+add_library(swiftedit_highlight STATIC src/highlight/language.cpp src/highlight/css_language.cpp
+  src/highlight/highlighter.cpp src/highlight/decorations.cpp src/highlight/css_outline.cpp)
+target_include_directories(swiftedit_highlight PUBLIC src)
+add_executable(swiftedit-highlight-tests tests/highlight_tests.cpp)
+target_link_libraries(swiftedit-highlight-tests PRIVATE swiftedit_highlight)
+add_test(NAME highlight COMMAND swiftedit-highlight-tests)
+add_executable(swiftedit-decoration-tests tests/decoration_tests.cpp)
+target_link_libraries(swiftedit-decoration-tests PRIVATE swiftedit_highlight)
+add_test(NAME decorations COMMAND swiftedit-decoration-tests)
 if(WIN32)
   set(SWIFTEDIT_FILE_SOURCES src/file_windows.cpp src/paged_windows.cpp)
 elseif(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
