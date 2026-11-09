@@ -16,13 +16,9 @@ find_package(GUIForms 0.2 CONFIG REQUIRED COMPONENTS Application)
 find_package(stx_rtf2md 0.1 CONFIG REQUIRED)
 add_library(swiftedit_md4c STATIC third_party/md4c/md4c.c third_party/md4c/entity.c)
 target_include_directories(swiftedit_md4c PUBLIC third_party/md4c)
-# The syntax highlighter: languages, incremental line lexing, decorations
-# and the CSS outline. It depends on no GUI.Forms header, so the theme editor
-# and the command tools can link it alone.
-add_library(swiftedit_highlight STATIC src/highlight/language.cpp src/highlight/css_language.cpp
-  src/highlight/highlighter.cpp src/highlight/decorations.cpp src/highlight/css_outline.cpp
-  src/highlight/code_document.cpp)
-target_include_directories(swiftedit_highlight PUBLIC src)
+# The highlighter and the embeddable code editor (cmake/SwiftEditCodeEditor.cmake,
+# shared with consumers of a pinned checkout such as the theme editor).
+include(cmake/SwiftEditCodeEditor.cmake)
 add_executable(swiftedit-highlight-tests tests/highlight_tests.cpp)
 target_link_libraries(swiftedit-highlight-tests PRIVATE swiftedit_highlight)
 add_test(NAME highlight COMMAND swiftedit-highlight-tests)
@@ -32,14 +28,6 @@ add_test(NAME decorations COMMAND swiftedit-decoration-tests)
 add_executable(swiftedit-code-document-tests tests/code_document_tests.cpp)
 target_link_libraries(swiftedit-code-document-tests PRIVATE swiftedit_highlight)
 add_test(NAME code-document COMMAND swiftedit-code-document-tests)
-# The embeddable code editor (the theme editor's text pane): the highlighter
-# under a GUI.Forms control, its overview strip, and the theme engine bridge.
-# Linked against Application's shared Core, as the editor is.
-add_library(swiftedit_code_editor STATIC src/code_editor/code_editor.cpp src/code_editor/marker_strip.cpp
-  src/code_editor/theme_bridge.cpp)
-target_include_directories(swiftedit_code_editor PUBLIC src)
-target_compile_definitions(swiftedit_code_editor PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
-target_link_libraries(swiftedit_code_editor PUBLIC swiftedit_highlight GUIForms::Application)
 add_executable(swiftedit-code-editor-tests tests/code_editor_tests.cpp)
 target_link_libraries(swiftedit-code-editor-tests PRIVATE swiftedit_code_editor)
 add_test(NAME code-editor COMMAND swiftedit-code-editor-tests)
