@@ -1,0 +1,11 @@
+/* SwiftEdit's main window: the editor fills it. The editor builds its own
+   menus, text, views and status line in code (src/editor.cpp); its look is
+   the swiftedit theme package (themes/swiftedit) over the GUI.Forms base,
+   and its behaviour is program code. The dialogs it owns stay plain windows
+   over the editor's dialog controls (src/windows.cpp). */
+form swiftedit.window {
+  text: "Untitled - SwiftEdit";
+  client-size: 940 660;
+
+  swiftedit-editor notepad.editor { }
+}

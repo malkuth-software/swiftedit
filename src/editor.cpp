@@ -3,6 +3,7 @@
 #include "characters.hpp"
 #include "date_time.hpp"
 #include "rtf_import.hpp"
+#include "highlight/language.hpp"
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
@@ -79,7 +80,7 @@ void Editor::ButtonListener::operator()(gf::ButtonBase &) const {
     try {
         (*self).button_action(action);
     } catch (const std::exception &failure) {
-        (*(*self).find_status_).set_text(failure.what());
+        (*(*self).find_status_).text = failure.what();
     }
 }
 void Editor::PostedClose::operator()() const {
@@ -104,13 +105,13 @@ void Editor::continue_operation(Continuation next) {
         show_csv(false);
         save_identity_.reset();
         document_ = {};
-        (*text_).set_text("");
-        (*text_).set_newline_sequence(native_newline());
+        (*text_).text = "";
+        (*text_).newline_sequence = native_newline();
         refresh();
         focus_text();
         break;
     case Continuation::open_document:
-        show_picker(false);
+        choose_file(false);
         break;
     case Continuation::close_window:
         close_authorized_ = true;
@@ -155,23 +156,23 @@ void Editor::button_action(ButtonAction action) {
         break;
     case ButtonAction::apply_font: {
         const gf::FontRole role =
-            (*font_role_).selected_index() == 0 ? gf::FontRole::monospace : gf::FontRole::content;
+            (*font_role_).selected_index.read() == 0 ? gf::FontRole::monospace : gf::FontRole::content;
         const std::string size_text((*font_size_).selected_text());
         const double size = std::stod(size_text);
-        const std::uint16_t weight = (*font_bold_).checked() ? 700 : 400;
-        const gf::FontSpec font{role, size, weight, (*font_italic_).checked()};
-        (*text_).set_font(font);
+        const std::uint16_t weight = (*font_bold_).checked.read() ? 700 : 400;
+        const gf::FontSpec font{role, size, weight, (*font_italic_).checked.read()};
+        (*text_).font = font;
         break;
     }
     }
 }
 void Editor::place_find_label(const char *id, const char *text, gf::Rect bounds) {
-    const std::shared_ptr<gf::Label> label = gf::make_control<gf::Label>(gf::StableId(id), text);
+    const std::shared_ptr<gf::Label> label = gf::make_control<gf::Label>(gf::StableId(std::string_view(id)), text);
     (*find_.root).place(label, bounds);
 }
 std::shared_ptr<gf::Button> Editor::place_find_button(const char *id, const char *text,
                                                       gf::Rect bounds, ButtonAction action) {
-    const std::shared_ptr<gf::Button> button = gf::make_control<gf::Button>(gf::StableId(id), text);
+    const std::shared_ptr<gf::Button> button = gf::make_control<gf::Button>(gf::StableId(std::string_view(id)), text);
     (*find_.root).place(button, bounds);
     gf::SubscriptionToken subscription =
         (*button).clicked().subscribe(*this, ButtonListener{observe(), action});
@@ -191,15 +192,15 @@ gf::MenuItemSpec Editor::item(std::string id, std::string label, std::string sho
     (*command).set_shortcut(shortcut_text);
     subscriptions_.push_back((*command).invoked().subscribe(*this, CommandListener{observe(), id}));
     commands_[id] = command;
-    const bool toggle = id == "wrap" || id == "status" || id == "csv-view" || id == "markdown-view";
+    const bool toggle = id == "wrap" || id == "status" || id == "csv-view" || id == "markdown-view" ||
+                        id.starts_with("language-");
     const gf::MenuItemKind kind = toggle ? gf::MenuItemKind::check : gf::MenuItemKind::command;
     const gf::MenuItemSpec result{id, kind, command, label};
     return result;
 }
 void Editor::initialize_control_tree() {
     menu_ = gf::make_control<gf::MenuStrip>(gf::StableId("notepad.menus"));
-    (*menu_).set_items(
-        {{"file",
+    (*menu_).set_items({{"file",
           "&File",
           {item("new", "&New", "Ctrl+N"),
            item("new-window", "New &Window", "Ctrl+Shift+N"),
@@ -223,6 +224,10 @@ void Editor::initialize_control_tree() {
            item("newline-lf", "Convert Line Endings to &LF"),
            item("newline-crlf", "Convert Line Endings to &CRLF")}},
          {"format", "F&ormat", {item("wrap", "&Word Wrap"), item("font", "&Font...")}},
+         {"language",
+          "&Language",
+          {item("language-plain", "&Plain Text"), item("language-css", "&CSS Theme Sheet"),
+           item("language-form", "&Form Document")}},
          {"view",
           "&View",
           {item("status", "&Status Bar"), item("csv-view", "CSV &Table View"),
@@ -233,25 +238,26 @@ void Editor::initialize_control_tree() {
          {"help", "&Help", {item("help", "View &Help", "F1"), item("about", "&About SwiftEdit")}}});
     add_child(menu_);
     text_ = gf::make_control<gf::TextBox>(gf::StableId("notepad.document"));
-    (*text_).set_multiline(true);
-    (*text_).set_auto_scroll(true);
-    (*text_).set_word_wrap(false);
-    (*text_).set_accepts_tab(true);
-    (*text_).set_newline_sequence(native_newline());
-    (*text_).set_maximum_length(gf::TextBox::maximum_multiline_bytes);
-    (*text_).set_font({gf::FontRole::monospace, 14, 400, false});
-    (*text_).set_accessible_name("Document text");
+    (*text_).multiline = true;
+    (*text_).auto_scroll = true;
+    (*text_).word_wrap = false;
+    (*text_).accepts_tab = true;
+    (*text_).newline_sequence = native_newline();
+    (*text_).maximum_length = gf::TextBox::maximum_multiline_bytes;
+    (*text_).font = gf::FontSpec{gf::FontRole::monospace, 14, 400, false};
+    (*text_).accessible_name = "Document text";
     add_child(text_);
     csv_ = gf::make_control<CsvView>(gf::StableId("swiftedit.csv"));
-    (*csv_).set_visible(false);
+    (*csv_).visible = false;
     (*csv_).set_context_command(commands_.at("csv-convert-value"));
     subscriptions_.push_back((*csv_).changed().subscribe(*this, CsvListener{observe()}));
     add_child(csv_);
     markdown_ = gf::make_control<MarkdownView>(gf::StableId("swiftedit.markdown"));
-    (*markdown_).set_visible(false);
+    (*markdown_).visible = false;
     add_child(markdown_);
     status_ = gf::make_control<gf::Label>(gf::StableId("notepad.status"));
-    (*status_).set_use_mnemonic(false);
+    (*status_).use_mnemonic = false;
+    (*status_).classes = std::vector<std::string>{"status-line"};
     add_child(status_);
     subscriptions_.push_back((*text_).text_changed().subscribe(*this, TextListener{observe()}));
     subscriptions_.push_back(
@@ -306,7 +312,7 @@ void Editor::refresh() {
     if (!text_ || !status_)
         return;
     selection_metadata_current_ = false;
-    const std::string_view content = (*text_).text();
+    const std::string content = (*text_).text.read();
     if (csv_visible_)
         (*csv_).set_source(content);
     if (markdown_visible_)
@@ -319,14 +325,29 @@ void Editor::refresh() {
         counted_text_.set_text(content);
         character_count_ = counted_text_.grapheme_count().value();
     }
-    status_format_ = encoding_name(document_.encoding) + " | " + newline_name(content);
+    static_cast<void>(code_.update(content));
+    styles_.paint(code_, *text_);
+    for (const swiftedit::highlight::Language *const language : swiftedit::highlight::registered_languages()) {
+        const std::string command = "language-" + std::string((*language).name());
+        const std::map<std::string, std::shared_ptr<gf::Command>>::const_iterator found = commands_.find(command);
+        if (found != commands_.end())
+            (*(*found).second).set_checked(language == &code_.language());
+    }
+    status_format_ = encoding_name(document_.encoding) + " | " + newline_name(content) + " | " +
+                     std::string(code_.language().display_name());
     selection_metadata_current_ = true;
     refresh_selection();
     (*commands_.at("undo")).set_enabled((*text_).can_undo());
     (*commands_.at("redo")).set_enabled((*text_).can_redo());
-    (*commands_.at("wrap")).set_checked((*text_).word_wrap());
+    (*commands_.at("wrap")).set_checked((*text_).word_wrap.read());
     (*commands_.at("status")).set_checked(show_status_);
     refresh_title(content);
+}
+// Lexes the mirrored text again in `language`; refresh brings the menu's
+// checks in step.
+void Editor::choose_language(const swiftedit::highlight::Language &language) {
+    code_.set_language(language);
+    styles_.paint(code_, *text_);
 }
 void Editor::refresh_title(const std::string_view content) {
     if (!handle_.active())
@@ -340,8 +361,8 @@ void Editor::refresh_title(const std::string_view content) {
     if (changed.accepted())
         native_title_ = std::move(title);
     else
-        (*status_).set_text(title + " | Native title update unavailable (host error " +
-                            std::to_string(static_cast<unsigned>(changed.error)) + ").");
+        (*status_).text = title + " | Native title update unavailable (host error " +
+                            std::to_string(static_cast<unsigned>(changed.error)) + ").";
 }
 void Editor::refresh_selection() {
     // The pinned TextBox publishes text changes before selection changes. A
@@ -372,9 +393,9 @@ void Editor::refresh_selection() {
     const std::size_t first_character = counted_text_.grapheme_index(selection.start()).value();
     const std::size_t last_character = counted_text_.grapheme_index(selection.end()).value();
     const std::size_t selected = last_character - first_character;
-    (*status_).set_text("Ln " + std::to_string(line) + ", Col " + std::to_string(column) + " | " +
+    (*status_).text = "Ln " + std::to_string(line) + ", Col " + std::to_string(column) + " | " +
                         std::to_string(character_count_) + " characters | " +
-                        std::to_string(selected) + " selected | " + status_format_);
+                        std::to_string(selected) + " selected | " + status_format_;
     for (const char *id : {"cut", "copy", "delete"})
         (*commands_.at(id)).set_enabled(csv_visible_ || !(*text_).selection().empty());
 }
@@ -386,7 +407,7 @@ void Editor::focus_text() {
                                                : std::static_pointer_cast<gf::Control>(text_));
 }
 void Editor::apply_csv_change(const std::string &source) {
-    if (source == (*text_).text())
+    if (source == (*text_).text.read())
         return;
     const gf::TextBox::MultilineValidation supported = gf::TextBox::validate_multiline_text(source);
     if (supported != gf::TextBox::MultilineValidation::valid)
@@ -409,36 +430,34 @@ void Editor::show_csv(bool show) {
                 character += 32;
         if (extension != L".csv")
             throw std::runtime_error("Table view is available only for .csv files.");
-        (*csv_).set_source((*text_).text());
+        (*csv_).set_source((*text_).text.read());
         show_markdown(false);
     }
     csv_visible_ = show;
     if (!show)
         (*csv_).cancel_calculations();
-    (*text_).set_visible(!show);
-    (*csv_).set_visible(show);
+    (*text_).visible = !show;
+    (*csv_).visible = show;
     refresh();
     focus_text();
 }
 void Editor::show_markdown(bool show) {
     if (show) {
-        (*markdown_).set_source((*text_).text());
+        (*markdown_).set_source((*text_).text.read());
         if (csv_visible_)
             show_csv(false);
     }
     markdown_visible_ = show;
     if (!show)
         (*markdown_).cancel_preparation();
-    (*text_).set_visible(!show && !csv_visible_);
-    (*markdown_).set_visible(show);
+    (*text_).visible = !show && !csv_visible_;
+    (*markdown_).visible = show;
     refresh();
     focus_text();
 }
 gf::HostDialogChoice Editor::message(std::string title, std::string text,
                                      gf::HostMessageButtons buttons) {
-    gf::Window *owner = picker_active_
-                            ? (active_save_picker_ ? save_picker_.window : open_picker_.window)
-                            : window();
+    gf::Window *owner = window();
     if (!owner || !(*owner).host_services())
         throw std::runtime_error("No dialog service is attached.");
     gf::HostMessageDialogRequest payload{};
@@ -451,9 +470,7 @@ gf::HostDialogChoice Editor::message(std::string title, std::string text,
                                  : gf::HostDialogChoice::cancel;
     gf::HostDialogRequest request{};
     request.request_id = dialog_sequence_++;
-    request.owner_id = picker_active_
-                           ? (active_save_picker_ ? "notepad.save-picker" : "notepad.open-picker")
-                           : "notepad.main";
+    request.owner_id = "notepad.main";
     request.payload = std::move(payload);
     const gf::HostDialogResult result = (*(*owner).host_services()).show_dialog(request);
     if (!result.status.accepted())
@@ -463,15 +480,15 @@ gf::HostDialogChoice Editor::message(std::string title, std::string text,
     return response.choice;
 }
 void Editor::error(const std::string &text) {
-    (*status_).set_text(text);
-    (*status_).set_visible(true);
+    (*status_).text = text;
+    (*status_).visible = true;
     try {
         message("SwiftEdit", text);
     } catch (...) { /* Keep the error visible if native services fail. */
     }
 }
 void Editor::after_unsaved(Continuation next) {
-    if (!document_.dirty((*text_).text())) {
+    if (!document_.dirty((*text_).text.read())) {
         continue_operation(next);
         return;
     }
@@ -506,12 +523,13 @@ void Editor::open_file(const std::filesystem::path &source) {
             "logical line. The current document was kept.");
     show_markdown(false);
     show_csv(false);
-    (*text_).set_text(next.saved_text);
+    (*text_).text = next.saved_text;
     cancel_search();
     save_identity_.reset();
     document_ = std::move(next);
-    (*text_).set_newline_sequence(preferred_newline(document_.saved_text));
+    (*text_).newline_sequence = preferred_newline(document_.saved_text);
     (*text_).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
+    choose_language(swiftedit::highlight::language_for_file_name(path_utf8(source.filename())));
     refresh();
     focus_text();
 }
@@ -525,12 +543,12 @@ void Editor::import_rtf_file(std::string_view bytes) {
             "limit. The current document was kept.");
     show_markdown(false);
     show_csv(false);
-    (*text_).set_text(imported.markdown);
+    (*text_).text = imported.markdown;
     cancel_search();
     save_identity_.reset();
     // Untitled and unsaved: the converted text is dirty until saved as Markdown.
     document_ = Document{};
-    (*text_).set_newline_sequence(preferred_newline(imported.markdown));
+    (*text_).newline_sequence = preferred_newline(imported.markdown);
     (*text_).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
     refresh();
     focus_text();
@@ -568,7 +586,7 @@ void Editor::show_import_summary() {
 }
 bool Editor::save_to(const std::filesystem::path &path, const FileSnapshot &expected) {
     try {
-        document_.save(path, (*text_).text(), expected);
+        document_.save(path, (*text_).text.read(), expected);
         (*text_).clear_undo_history();
         refresh();
         return true;
@@ -580,7 +598,7 @@ bool Editor::save_to(const std::filesystem::path &path, const FileSnapshot &expe
 void Editor::save(bool save_as, Continuation continuation) {
     if (save_as || document_.path.empty()) {
         after_save_ = continuation;
-        show_picker(true);
+        choose_file(true);
     } else {
         static_cast<void>(request_save_to(document_.path, document_.snapshot, continuation));
     }
@@ -608,7 +626,7 @@ void Editor::execute(const std::string &id) {
             finish_save_choice(false, true);
         return;
     }
-    if (picker_active_)
+    if (file_dialog_active_)
         return;
     try {
         const bool source_search = id == "find" || id == "replace" || id == "find-next" ||
@@ -683,7 +701,7 @@ void Editor::execute(const std::string &id) {
                 (*csv_).commit_cell(clip.text_utf8);
                 return;
             }
-            std::string candidate = std::string((*text_).text());
+            std::string candidate = std::string((*text_).text.read());
             candidate.replace((*text_).selection().start().value(), (*text_).selection().length(),
                               clip.text_utf8);
             if (gf::TextBox::validate_multiline_text(candidate) !=
@@ -700,7 +718,7 @@ void Editor::execute(const std::string &id) {
                 throw std::runtime_error("The character dialog is not ready.");
         } else if (id == "inspect-characters") {
             const gf::TextSelection selected = (*text_).selection();
-            const std::string_view content = (*text_).text();
+            const std::string content = (*text_).text.read();
             std::size_t first = selected.start().value();
             std::size_t length = selected.length();
             if (!length && first < content.size()) {
@@ -721,7 +739,7 @@ void Editor::execute(const std::string &id) {
                 (*text_).replace_selection(document_.opened_text);
             }
         } else if (id == "word-count") {
-            const std::size_t words = word_count((*text_).text());
+            const std::size_t words = word_count((*text_).text.read());
             std::string report = "Document: " + std::to_string(words) + " words";
             if (!(*text_).selection().empty()) {
                 const std::string selected = (*text_).selected_text();
@@ -739,13 +757,13 @@ void Editor::execute(const std::string &id) {
                 (*text_).replace_selection(timestamp);
         } else if (id == "newline-lf" || id == "newline-crlf") {
             const std::string ending = id == "newline-lf" ? "\n" : "\r\n";
-            const std::string converted = swiftedit::normalize_newlines((*text_).text(), ending);
+            const std::string converted = swiftedit::normalize_newlines((*text_).text.read(), ending);
             if (gf::TextBox::validate_multiline_text(converted) !=
                 gf::TextBox::MultilineValidation::valid)
                 throw std::runtime_error("Converted text exceeds GUI limits.");
             (*text_).select_all();
             (*text_).replace_selection(converted);
-            (*text_).set_newline_sequence(ending);
+            (*text_).newline_sequence = ending;
         } else if (id == "delete") {
             if (csv_visible_)
                 (*csv_).clear_cells();
@@ -767,12 +785,15 @@ void Editor::execute(const std::string &id) {
                 show_find();
             else
                 find_next();
+        } else if (id.starts_with("language-")) {
+            choose_language(swiftedit::highlight::language_named(std::string_view(id).substr(9)));
+            refresh();
         } else if (id == "wrap") {
-            (*text_).set_word_wrap(!(*text_).word_wrap());
+            (*text_).word_wrap = !(*text_).word_wrap.read();
             refresh();
         } else if (id == "status") {
             show_status_ = !show_status_;
-            (*status_).set_visible(show_status_);
+            (*status_).visible = show_status_;
             invalidate(gf::Dirty::layout);
             refresh();
         } else if (id == "font")
@@ -859,15 +880,17 @@ void Editor::ready(gf::Window &w, gf::ApplicationWindowHandle handle,
         }
     }
     focus_text();
+    if (!screenshot_directory_.empty())
+        start_screenshots();
 }
 void Editor::closing(gf::HostCloseRequest &request) {
     if (close_authorized_)
         return;
-    if (picker_active_ || pending_save_ || conflict_review_) {
+    if (file_dialog_active_ || pending_save_ || conflict_review_) {
         request.cancel = true;
         return;
     }
-    if (!document_.dirty((*text_).text()))
+    if (!document_.dirty((*text_).text.read()))
         return;
     request.cancel = true;
     try {
@@ -883,11 +906,11 @@ void Editor::build_find() {
     query_ = gf::make_control<QueryField>(gf::StableId("find.query"));
     (*find_.root).place(query_, {125, 16, 360, 30});
     replacement_ = gf::make_control<gf::TextBox>(gf::StableId("find.replacement"));
-    (*replacement_).set_accessible_name("Replace with");
-    (*replacement_).set_maximum_length(4096);
+    (*replacement_).accessible_name = "Replace with";
+    (*replacement_).maximum_length = 4096;
     (*find_.root).place(replacement_, {125, 58, 360, 30});
     match_case_ = gf::make_control<gf::CheckBox>(gf::StableId("find.case"), "Match case");
-    (*match_case_).set_checked(true);
+    (*match_case_).checked = true;
     (*find_.root).place(match_case_, {16, 102, 200, 28});
     find_next_button_ =
         place_find_button("find.next", "Find Next", {16, 144, 108, 32}, ButtonAction::find_next);
@@ -898,7 +921,7 @@ void Editor::build_find() {
     find_status_ = gf::make_control<gf::Label>(
         gf::StableId("find.status"),
         "Right-click a character or press Ctrl+? to toggle one-character wildcard. Search wraps.");
-    (*find_status_).set_use_mnemonic(false);
+    (*find_status_).use_mnemonic = false;
     (*find_.root).place(find_status_, {16, 190, 470, 50});
 }
 void Editor::show_find() {
@@ -927,6 +950,21 @@ void Editor::cancel_search() {
     search_frame_.disconnect();
     search_.reset();
 }
+void Editor::SearchTick::operator()(gf::FrameTime now) const {
+    const std::shared_ptr<Editor> target = owner.lock();
+    if (!target)
+        return;
+    (*target).search_frame_.disconnect();
+    (*target).on_frame(now);
+}
+// The next slice runs once on the UI timer; the timer belongs to the editor,
+// so destroying the editor revokes it.
+void Editor::schedule_search() {
+    const gf::FrameTime deadline = gf::FrameClock::now() + std::chrono::milliseconds(1);
+    const std::shared_ptr<Editor> self = std::static_pointer_cast<Editor>(shared_from_this());
+    search_frame_ = (*window()).schedule_ui_timer(*this, gf::minimum_ui_timer_interval, deadline,
+                                                  SearchTick{self});
+}
 void Editor::on_frame(gf::FrameTime) {
     if (!search_)
         return;
@@ -934,18 +972,18 @@ void Editor::on_frame(gf::FrameTime) {
         advance_search();
     } catch (const std::exception &failure) {
         cancel_search();
-        (*find_status_).set_text(failure.what());
+        (*find_status_).text = failure.what();
     }
 }
 void Editor::find_next() {
     cancel_search();
     if ((*query_).text().empty()) {
-        (*find_status_).set_text("Enter the text to find; flag unknown characters as wildcards.");
+        (*find_status_).text = "Enter the text to find; flag unknown characters as wildcards.";
         return;
     }
     const swiftedit::SearchPattern pattern = (*query_).pattern();
     std::unique_ptr<FindWork> work = std::make_unique<FindWork>(
-        (*text_).text(), pattern, (*text_).selection().end().value(), (*match_case_).checked());
+        (*text_).text.read(), pattern, (*text_).selection().end().value(), (*match_case_).checked.read());
     (*work).source_revision = counted_text_.revision();
     (*work).query_revision = (*query_).revision();
     (*work).selection = (*text_).selection();
@@ -958,11 +996,10 @@ void Editor::advance_search() {
     FindWork &work = *search_;
     if (work.source_revision != counted_text_.revision() ||
         work.query_revision != (*query_).revision() || work.selection != (*text_).selection() ||
-        work.match_case != (*match_case_).checked() ||
-        (work.replace && work.replacement != (*replacement_).text())) {
+        work.match_case != (*match_case_).checked.read() ||
+        (work.replace && work.replacement != (*replacement_).text.read())) {
         cancel_search();
-        (*find_status_)
-            .set_text("Search cancelled because the document, selection or query changed.");
+        (*find_status_).text = "Search cancelled because the document, selection or query changed.";
         return;
     }
     if (work.replace) {
@@ -980,44 +1017,43 @@ void Editor::advance_search() {
         const bool wrapped = work.wrapped;
         cancel_search();
         (*text_).select(gf::Utf8Offset(found.offset), gf::Utf8Offset(found.offset + found.length));
-        (*find_status_).set_text(wrapped ? "Found (wrapped to beginning)." : "Found.");
+        (*find_status_).text = wrapped ? "Found (wrapped to beginning)." : "Found.";
         refresh();
     } else if (progress.complete) {
         cancel_search();
-        (*find_status_).set_text("Text not found.");
+        (*find_status_).text = "Text not found.";
     } else if (window()) {
-        (*find_status_).set_text("Searching... Close Find or change the query to cancel.");
-        const gf::FrameTime deadline = gf::FrameClock::now() + std::chrono::milliseconds(1);
-        search_frame_ = (*window()).schedule_paint(shared_from_this(), deadline);
+        (*find_status_).text = "Searching... Close Find or change the query to cancel.";
+        schedule_search();
     } else {
         cancel_search();
-        (*find_status_).set_text("Search requires an attached window.");
+        (*find_status_).text = "Search requires an attached window.";
     }
 }
 void Editor::replace_one() {
     if ((*query_).text().empty()) {
-        (*find_status_).set_text("Enter the text to replace.");
+        (*find_status_).text = "Enter the text to replace.";
         return;
     }
     const std::string selected = (*text_).selected_text();
     const gf::TextStore source(selected);
     const swiftedit::SearchPattern pattern = (*query_).pattern();
     const swiftedit::SearchProgress progress =
-        swiftedit::search_slice(source, pattern, 0, 1, (*match_case_).checked());
+        swiftedit::search_slice(source, pattern, 0, 1, (*match_case_).checked.read());
     const std::optional<swiftedit::SourceRange> match = progress.match;
     if (match && (*match).offset == 0 && selected.size() == (*match).length)
-        (*text_).replace_selection((*replacement_).text());
+        (*text_).replace_selection((*replacement_).text.read());
     find_next();
 }
 void Editor::replace_every() {
     cancel_search();
     if ((*query_).text().empty()) {
-        (*find_status_).set_text("Enter the literal text to replace.");
+        (*find_status_).text = "Enter the literal text to replace.";
         return;
     }
     const swiftedit::SearchPattern pattern = (*query_).pattern();
     std::unique_ptr<FindWork> work = std::make_unique<FindWork>(
-        (*text_).text(), pattern, std::string((*replacement_).text()), (*match_case_).checked());
+        (*text_).text.read(), pattern, std::string((*replacement_).text.read()), (*match_case_).checked.read());
     (*work).source_revision = counted_text_.revision();
     (*work).query_revision = (*query_).revision();
     (*work).selection = (*text_).selection();
@@ -1028,13 +1064,11 @@ void Editor::advance_replacement() {
     const bool complete = (*(*search_).replace).step(4096);
     if (!complete) {
         if (window()) {
-            (*find_status_)
-                .set_text("Preparing replacements... Close Find to cancel. Document unchanged.");
-            const gf::FrameTime deadline = gf::FrameClock::now() + std::chrono::milliseconds(1);
-            search_frame_ = (*window()).schedule_paint(shared_from_this(), deadline);
+            (*find_status_).text = "Preparing replacements... Close Find to cancel. Document unchanged.";
+            schedule_search();
         } else {
             cancel_search();
-            (*find_status_).set_text("Replacement requires an attached window.");
+            (*find_status_).text = "Replacement requires an attached window.";
         }
         return;
     }
@@ -1043,8 +1077,7 @@ void Editor::advance_replacement() {
     cancel_search();
     if (gf::TextBox::validate_multiline_text(result.text) !=
         gf::TextBox::MultilineValidation::valid) {
-        (*find_status_)
-            .set_text("Replacement exceeds editor document or line limits. No changes made.");
+        (*find_status_).text = "Replacement exceeds editor document or line limits. No changes made.";
         return;
     }
     if (result.count) {
@@ -1052,11 +1085,11 @@ void Editor::advance_replacement() {
         const bool replaced = (*text_).replace_selection(result.text);
         if (!replaced) {
             (*text_).select(original_selection.anchor, original_selection.caret);
-            (*find_status_).set_text("Replacement was not applied.");
+            (*find_status_).text = "Replacement was not applied.";
             return;
         }
     }
-    (*find_status_).set_text(std::to_string(result.count) + " replacement(s).");
+    (*find_status_).text = std::to_string(result.count) + " replacement(s).";
     refresh();
 }
 void Editor::build_font() {
@@ -1065,14 +1098,14 @@ void Editor::build_font() {
         gf::StableId("font.label"), "Font role and size (display only)");
     (*font_.root).place(label, {16, 16, 380, 28});
     font_role_ = gf::make_control<gf::ComboBox>(gf::StableId("font.role"));
-    (*font_role_).set_items({"Monospace", "Content"});
-    (*font_role_).set_selected_index(0);
-    (*font_role_).set_accessible_name("Font role");
+    (*font_role_).items = {"Monospace", "Content"};
+    (*font_role_).selected_index = 0;
+    (*font_role_).accessible_name = "Font role";
     (*font_.root).place(font_role_, {16, 58, 220, 30});
     font_size_ = gf::make_control<gf::ComboBox>(gf::StableId("font.size"));
-    (*font_size_).set_items({"10", "12", "14", "16", "18", "20", "24", "28", "32"});
-    (*font_size_).set_selected_index(2);
-    (*font_size_).set_accessible_name("Font size");
+    (*font_size_).items = {"10", "12", "14", "16", "18", "20", "24", "28", "32"};
+    (*font_size_).selected_index = 2;
+    (*font_size_).accessible_name = "Font size";
     (*font_.root).place(font_size_, {252, 58, 130, 30});
     font_bold_ = gf::make_control<gf::CheckBox>(gf::StableId("font.bold"), "Bold");
     (*font_.root).place(font_bold_, {16, 106, 160, 28});
@@ -1101,7 +1134,7 @@ void Editor::build_save_choices() {
         gf::StableId("save-choices.explanation"),
         "This document has mixed line endings. Save them exactly as they are, convert all line "
         "endings to the document's current default, or cancel the save.");
-    (*explanation).set_text_wrapping(gf::TextWrapping::word);
+    (*explanation).text_wrapping = gf::TextWrapping::word;
     (*save_choices_.root).place(explanation, {16, 16, 568, 94});
     save_keep_ = gf::make_control<gf::Button>(gf::StableId("save-choices.keep"), "Save As-Is");
     save_normalize_ = gf::make_control<gf::Button>(gf::StableId("save-choices.normalize"),
@@ -1132,7 +1165,7 @@ bool Editor::request_save_to(const std::filesystem::path &path, const FileSnapsh
         begin_conflict(path, next);
         return false;
     }
-    if (newline_name((*text_).text()) != "Mixed (preserved)") {
+    if (newline_name((*text_).text.read()) != "Mixed (preserved)") {
         const bool saved = save_to(path, expected);
         if (saved && next != Continuation::none)
             continue_operation(next);
@@ -1141,7 +1174,7 @@ bool Editor::request_save_to(const std::filesystem::path &path, const FileSnapsh
     PendingSave pending{path, expected, counted_text_.revision(), next};
     pending_save_ = std::move(pending);
     cancel_search();
-    set_enabled(false);
+    enabled = false;
     static_cast<void>(find_.handle.hide());
     static_cast<void>(font_.handle.hide());
     static_cast<void>(characters_.handle.hide());
@@ -1155,7 +1188,7 @@ void Editor::finish_save_choice(bool normalize, bool cancel) {
     PendingSave pending = std::move(*pending_save_);
     pending_save_.reset();
     static_cast<void>(save_choices_.handle.hide());
-    set_enabled(true);
+    enabled = true;
     focus_text();
     if (cancel)
         return;
@@ -1169,7 +1202,7 @@ void Editor::finish_save_choice(bool normalize, bool cancel) {
             saved = save_to(pending.path, pending.expected);
         else {
             const std::string converted =
-                swiftedit::normalize_newlines((*text_).text(), (*text_).newline_sequence());
+                swiftedit::normalize_newlines((*text_).text.read(), (*text_).newline_sequence.read());
             if (gf::TextBox::validate_multiline_text(converted) !=
                 gf::TextBox::MultilineValidation::valid)
                 throw std::runtime_error(
@@ -1178,7 +1211,7 @@ void Editor::finish_save_choice(bool normalize, bool cancel) {
             published = true;
             // Disk publication succeeded; display the same saved content and
             // establish the requested save boundary only after that success.
-            (*text_).set_text(converted);
+            (*text_).text = converted;
             (*text_).clear_undo_history();
             refresh();
             saved = true;

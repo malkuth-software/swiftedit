@@ -1,14 +1,13 @@
 #include "editor.hpp"
 #include "user_paths.hpp"
+#include "swiftedit_theme.hpp"
 #include <deque>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
+#include <variant>
 #include "platform.hpp"
-#ifdef _WIN32
-#include <winioctl.h>
-#endif
 
 namespace gf = gui_forms;
 void settle_csv(notepad::CsvView &grid) {
@@ -34,6 +33,10 @@ public:
     std::string clipboard{};
     int dialogs{};
     std::string last_message{};
+    // UTF-8 paths the next file dialogs return; empty means cancel.
+    std::deque<std::string> paths{};
+    gf::HostOpenFileDialogRequest last_open{};
+    gf::HostSaveFileDialogRequest last_save{};
 
 protected:
     gf::HostMonitorResult query_monitors_impl() override { return {}; }
@@ -52,6 +55,23 @@ protected:
     }
     gf::HostDialogResult show_dialog_impl(const gf::HostDialogRequest &request) override {
         ++dialogs;
+        // File dialogs answer with the next queued path, or cancel.
+        const bool open = std::holds_alternative<gf::HostOpenFileDialogRequest>(request.payload);
+        const bool save = std::holds_alternative<gf::HostSaveFileDialogRequest>(request.payload);
+        if (open || save) {
+            if (open)
+                last_open = std::get<gf::HostOpenFileDialogRequest>(request.payload);
+            else
+                last_save = std::get<gf::HostSaveFileDialogRequest>(request.payload);
+            gf::HostPathDialogResult chosen{};
+            if (!paths.empty()) {
+                chosen.outcome = gf::HostDialogOutcome::accepted;
+                chosen.paths.push_back(paths.front());
+                paths.pop_front();
+            }
+            const gf::HostDialogResult result{{}, request.request_id, chosen};
+            return result;
+        }
         const gf::HostMessageDialogRequest &message =
             std::get<gf::HostMessageDialogRequest>(request.payload);
         last_message = message.message;
@@ -72,13 +92,28 @@ void check(bool value, const char *message) {
         throw std::runtime_error(message);
 }
 
+// The shipped theme package compiles onto the GUI.Forms base without a
+// finding, as main compiles it when it makes the application.
+void verify_theme_package() {
+    namespace gf = gui_forms;
+    gf::ApplicationConfig config{};
+    config.theme.base = gf::ThemeBase::gui_forms;
+    config.theme.packages.push_back(swiftedit::swiftedit_theme());
+    gf::ApplicationCreateResult created = gf::Application::create(std::move(config));
+    for (const gf::ThemeCompileDiagnostic &finding : created.findings)
+        std::cerr << "theme finding " << finding.code << ' ' << finding.file << ':' << finding.line
+                  << ' ' << finding.detail << '\n';
+    check(static_cast<bool>(created), "SwiftEdit's theme package compiles");
+    check(created.findings.empty(), "SwiftEdit's theme package compiles without a warning");
+}
+
 void verify_document_scrollbars() {
     const std::shared_ptr<notepad::Editor> editor =
         gf::make_control<notepad::Editor>(gf::StableId("scrollbars.editor"));
     gf::Window window(editor, {360, 240});
     window.perform_layout();
     gf::TextBox &text = *(*editor).text_control();
-    text.set_text("short document");
+    text.text = "short document";
     static_cast<void>(text.visual_line_count());
     check(!text.vscroll() && !text.hscroll(), "Fitting document needs no scrollbars");
 
@@ -87,7 +122,7 @@ void verify_document_scrollbars() {
         source.append(140, 'x');
         source.append("\n");
     }
-    text.set_text(source);
+    text.text = source;
     text.select(gf::Utf8Offset(0), gf::Utf8Offset(4));
     static_cast<void>(text.visual_line_count());
     window.perform_layout();
@@ -100,7 +135,7 @@ void verify_document_scrollbars() {
               text.scroll_offset().y == text.scroll_position().y &&
               text.scroll_offset().x > 0 && text.scroll_offset().y > 0,
           "Scrollbar thumb position moves the text viewport on both axes");
-    check(text.text() == source && text.selection() == selection && text.can_undo() == undo_before,
+    check(text.text.read() == source && text.selection() == selection && text.can_undo() == undo_before,
           "Scrolling preserves document, selection and undo history");
     const double before_wheel = text.scroll_offset().y;
     const gf::Rect bounds = text.absolute_bounds();
@@ -109,7 +144,7 @@ void verify_document_scrollbars() {
     wheel.position = {bounds.x + 40, bounds.y + 40};
     wheel.wheel_delta = {0, -1};
     text.on_pointer(wheel);
-    check(wheel.handled && text.scroll_offset().y > before_wheel &&
+    check(wheel.handled && text.scroll_target().y > before_wheel &&
               text.scroll_offset().y == text.vertical_scroll().value(),
           "Wheel scrolling updates the same document scrollbar position");
 
@@ -133,7 +168,7 @@ void verify_document_scrollbars() {
     window.perform_layout();
     static_cast<void>(text.visual_line_count());
     check(text.vscroll() && text.hscroll(), "Shrinking the viewport restores overflow bars");
-    text.set_text("short again");
+    text.text = "short again";
     static_cast<void>(text.visual_line_count());
     window.perform_layout();
     check(!text.vscroll() && !text.hscroll() && text.scroll_offset().x == 0 &&
@@ -174,7 +209,7 @@ void verify_view_menu_state() {
         }
     }
     check(toggles == 4, "All four view toggles expose checkmarks");
-    (*(*editor).text_control()).set_text("# Pending Markdown");
+    (*(*editor).text_control()).text = "# Pending Markdown";
     const std::shared_ptr<notepad::MarkdownView> markdown =
         std::dynamic_pointer_cast<notepad::MarkdownView>(find_control(editor, "swiftedit.markdown"));
     check(static_cast<bool>(markdown), "Editor owns its Markdown view");
@@ -183,9 +218,53 @@ void verify_view_menu_state() {
     (*editor).execute("markdown-view");
     check(!(*markdown).preparation_pending(), "Source mode cancels pending Markdown preparation");
     (*editor).execute("markdown-view");
-    check((*markdown).preparation_pending() && (*(*editor).text_control()).text() == "# Pending Markdown",
+    check((*markdown).preparation_pending() && (*(*editor).text_control()).text.read() == "# Pending Markdown",
           "Reopening the same source restarts cancelled work without changing text");
     (*editor).execute("markdown-view");
+}
+// The Language menu: one checked language at a time, the mirror lexed in it,
+// and the status line naming it.
+void verify_language_menu() {
+    const std::shared_ptr<notepad::Editor> editor =
+        gf::make_control<notepad::Editor>(gf::StableId("language.editor"));
+    gf::Window window(editor, {640, 400});
+    window.perform_layout();
+    const std::shared_ptr<gf::MenuStrip> menu =
+        std::dynamic_pointer_cast<gf::MenuStrip>(find_control(editor, "notepad.menus"));
+    check(static_cast<bool>(menu), "Editor exposes its menu strip");
+    std::vector<std::shared_ptr<gf::Command>> languages{};
+    for (const gf::MenuStripItemSpec &group : (*menu).items()) {
+        if (group.stable_id != "language")
+            continue;
+        for (const gf::MenuItemSpec &item : group.items) {
+            check(item.kind == gf::MenuItemKind::check, "Languages render checked state");
+            languages.push_back(item.command);
+        }
+    }
+    check(languages.size() == 3U, "Plain, CSS and Form languages");
+    (*(*editor).text_control()).text = "a { b: c; }";
+    check((*editor).code_document().language().name() == "plain" && (*languages[0]).state().checked &&
+              !(*languages[1]).state().checked,
+          "A new document is plain text");
+    (*editor).execute("language-css");
+    check((*editor).code_document().language().name() == "css" && (*languages[1]).state().checked &&
+              !(*languages[0]).state().checked,
+          "Choosing CSS checks it alone");
+    check((*editor).code_document().text() == "a { b: c; }" &&
+              (*editor).code_document().outline().rules().size() == 1U,
+          "The mirror is lexed as CSS");
+    (*(*editor).text_control()).text = "a { b: c; }\nd { e: f; }";
+    check((*editor).code_document().outline().rules().size() == 2U, "Edits reach the mirror");
+    (*editor).execute("language-form");
+    check((*languages[2]).state().checked && (*editor).code_document().language().name() == "form",
+          "Choosing Form checks it");
+    bool refused = false;
+    try {
+        static_cast<void>((*editor).application_windows(std::unique_ptr<gf::Window>{}, std::filesystem::path{}));
+    } catch (const std::invalid_argument &) {
+        refused = true;
+    }
+    check(refused, "A main window must be given");
 }
 void verify_conflict_fields() {
     const std::filesystem::path dir =
@@ -208,14 +287,14 @@ void verify_conflict_fields() {
         gf::make_control<notepad::Editor>(gf::StableId("conflict-test.editor"));
     std::vector<gf::ApplicationWindow> windows = (*editor).application_windows({});
     (*editor).open_file(path);
-    (*(*editor).text_control()).set_text("mine\n");
+    (*(*editor).text_control()).text = "mine\n";
     {
         std::ofstream file(path, std::ios::binary);
         file << "external";
     }
     (*editor).execute("save");
     (*editor).execute("conflict-copy");
-    const gf::Control::Ptr root = (*windows[8].model).root();
+    const gf::Control::Ptr root = (*windows[6].model).root();
     const std::shared_ptr<gf::TextBox> filename =
         std::dynamic_pointer_cast<gf::TextBox>(find_control(root, "conflict.filename"));
     const std::shared_ptr<gf::ComboBox> encoding =
@@ -223,13 +302,13 @@ void verify_conflict_fields() {
     const std::shared_ptr<gf::ComboBox> endings =
         std::dynamic_pointer_cast<gf::ComboBox>(find_control(root, "conflict.endings"));
     check(filename && encoding && endings, "Review controls are real owned dialog children");
-    check((*filename).text() == notepad::path_utf8(dir / "original.1.txt"),
+    check((*filename).text.read() == notepad::path_utf8(dir / "original.1.txt"),
           "New copy suggests versioned name");
-    (*encoding).set_selected_index(3);
-    (*endings).set_selected_index(2);
+    (*encoding).selected_index = 3;
+    (*endings).selected_index = 2;
     (*editor).execute("conflict-review");
     const std::filesystem::path copy = dir / "edited-name.txt";
-    (*filename).set_text(notepad::path_utf8(copy));
+    (*filename).text = notepad::path_utf8(copy);
     (*editor).execute("conflict-save");
     check((*editor).conflict_pending() && !std::filesystem::exists(copy),
           "Changed filename requires another review");
@@ -239,7 +318,7 @@ void verify_conflict_fields() {
     check(!(*editor).conflict_pending() && (*editor).document().path == copy &&
               copied.encoding == notepad::Encoding::utf16_be && copied.text == "mine\r\n" &&
               notepad::read_file(path).bytes == "external" &&
-              (*(*editor).text_control()).text() == copied.text,
+              (*(*editor).text_control()).text.read() == copied.text,
           "Reviewed new filename and metadata publish together while preserving original");
 }
 void verify_csv_keyboard_commands() {
@@ -273,7 +352,7 @@ void verify_csv_keyboard_commands() {
     const std::shared_ptr<notepad::CsvView> grid = (*editor).csv_control();
     (*editor).open_file(path);
     (*editor).execute("csv-view");
-    check((*grid).visible(), "Keyboard test has visible CSV grid");
+    check((*grid).visible.read(), "Keyboard test has visible CSV grid");
     window.perform_layout();
     for (const gf::Modifier modifier : {gf::Modifier::control, gf::Modifier::meta}) {
         (*grid).select_cell({0, 1});
@@ -284,20 +363,20 @@ void verify_csv_keyboard_commands() {
         check(window.dispatch_key(key) && services.clipboard == "=A1*3",
               "CSV Ctrl/Cmd+C copies formula source");
         key.physical_key = gf::PhysicalKey::x;
-        check(window.dispatch_key(key) && (*text).text() == "2,\r\n4,5" &&
+        check(window.dispatch_key(key) && (*text).text.read() == "2,\r\n4,5" &&
                   services.clipboard == "=A1*3",
               "CSV Ctrl/Cmd+X copies then clears the cell");
         key.physical_key = gf::PhysicalKey::z;
-        check(window.dispatch_key(key) && (*text).text() == "2,=A1*3\r\n4,5",
+        check(window.dispatch_key(key) && (*text).text.read() == "2,=A1*3\r\n4,5",
               "CSV Ctrl/Cmd+Z restores cut in one edit");
         services.clipboard = "7";
         key.physical_key = gf::PhysicalKey::v;
-        check(window.dispatch_key(key) && (*text).text() == "2,7\r\n4,5",
+        check(window.dispatch_key(key) && (*text).text.read() == "2,7\r\n4,5",
               "CSV Ctrl/Cmd+V commits the clipboard to the active cell");
         key.physical_key = gf::PhysicalKey::z;
         window.dispatch_key(key);
         key.modifiers = modifier | gf::Modifier::shift;
-        check(window.dispatch_key(key) && (*text).text() == "2,7\r\n4,5",
+        check(window.dispatch_key(key) && (*text).text.read() == "2,7\r\n4,5",
               "CSV Ctrl/Cmd+Shift+Z redoes the paste");
         key.modifiers = modifier;
         window.dispatch_key(key);
@@ -322,16 +401,16 @@ void verify_csv_keyboard_commands() {
             check(window.dispatch_key(insert_time), "CSV F5 is handled");
         } else
             (*editor).execute("date-time");
-        const swiftedit::Csv updated((*text).text());
+        const swiftedit::Csv updated((*text).text.read());
         const std::string &timestamp = updated.cell({1, 0}).value;
         check(timestamp.size() == 19 && timestamp[4] == '-' && timestamp[7] == '-' &&
                   timestamp[10] == ' ' && timestamp[13] == ':' && timestamp[16] == ':',
               "CSV date/time command stores a plain timestamp in the selected cell");
         check(updated.cell({0, 0}).value == "2" && updated.cell({0, 1}).value == "=A1*3" &&
-                  updated.cell({1, 1}).value == "5" && (*text).text().starts_with("2,=A1*3\r\n"),
+                  updated.cell({1, 1}).value == "5" && (*text).text.read().starts_with("2,=A1*3\r\n"),
               "Date/time insertion preserves other cells and original record endings");
         (*editor).execute("undo");
-        check((*text).text() == "2,=A1*3\r\n4,5", "CSV date/time insertion is one undoable edit");
+        check((*text).text.read() == "2,=A1*3\r\n4,5", "CSV date/time insertion is one undoable edit");
     }
     const std::shared_ptr<notepad::QueryField> query = (*editor).query_control();
     const std::shared_ptr<gf::TextBox> replacement = (*editor).replacement_control();
@@ -339,72 +418,45 @@ void verify_csv_keyboard_commands() {
     for (const std::string view : {"csv-view", "markdown-view"}) {
         for (const std::string command :
              {"find", "replace", "find-next", "replace-one", "replace-all"}) {
-            (*text).set_text("2,=A1*3\r\n4,5");
+            (*text).text = "2,=A1*3\r\n4,5";
             (*query).set_text("4");
-            (*replacement).set_text("9");
+            (*replacement).text = "9";
             if (command == "replace-one")
                 (*text).select(gf::Utf8Offset(9), gf::Utf8Offset(10));
             else
                 (*text).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
             (*editor).execute(view);
-            check(!(*text).visible(), "Search fixture starts with source hidden");
+            check(!(*text).visible.read(), "Search fixture starts with source hidden");
             (*editor).execute(command);
-            check((*text).visible(), "Source search commands reveal the editable source");
+            check((*text).visible.read(), "Source search commands reveal the editable source");
             if (command == "find-next")
                 check((*text).selected_text() == "4",
                       "Find Next exposes the matched source selection");
             if (command == "replace-one" || command == "replace-all") {
-                check((*text).text() == "2,=A1*3\r\n9,5",
+                check((*text).text.read() == "2,=A1*3\r\n9,5",
                       "Replacement from a presentation view changes the intended source");
                 (*editor).execute("undo");
-                check((*text).text() == "2,=A1*3\r\n4,5",
+                check((*text).text.read() == "2,=A1*3\r\n4,5",
                       "Replacement from a presentation view remains undoable");
             } else
-                check((*text).text() == "2,=A1*3\r\n4,5",
+                check((*text).text.read() == "2,=A1*3\r\n4,5",
                       "Revealing source for search does not mutate content");
         }
     }
 }
-void verify_picker_home() {
-    const std::filesystem::path home = notepad::user_home_directory();
-    const std::filesystem::path initial =
-        std::filesystem::canonical(std::filesystem::temp_directory_path()) / "unopened.txt";
-    const std::u8string home_utf8 = home.u8string();
-    const std::string expected(reinterpret_cast<const char *>(home_utf8.data()), home_utf8.size());
-    for (const bool named : {false, true}) {
-        const std::shared_ptr<notepad::Editor> editor =
-            gf::make_control<notepad::Editor>(gf::StableId("home.editor"));
-        const std::filesystem::path start = named ? initial : std::filesystem::path{};
-        std::vector<gf::ApplicationWindow> windows = (*editor).application_windows(start);
-        std::size_t checked = 0;
-        for (gf::ApplicationWindow &entry : windows) {
-            if (entry.stable_id != "notepad.open-picker" &&
-                entry.stable_id != "notepad.save-picker")
-                continue;
-            gf::Window &window = *entry.model;
-            entry.options.ready(window, {});
-            window.perform_layout();
-            const std::shared_ptr<gf::TextBox> path =
-                std::dynamic_pointer_cast<gf::TextBox>(window.find("file-manager.picker.path"));
-            const std::shared_ptr<gf::Button> home_button =
-                std::dynamic_pointer_cast<gf::Button>(window.find("file-manager.picker.root"));
-            check(path && home_button, "Picker exposes path and Home controls");
-            if (!named)
-                check((*path).text() == expected, "Untitled picker starts in user home, not cwd");
-            const bool clicked = (*home_button).perform_click();
-            check(clicked && (*path).text() == expected,
-                  "Open and Save picker Home resolves user home independently of document folder");
-            ++checked;
-        }
-        check(checked == 2, "Both picker profiles checked");
-    }
+// Open and Save As use GUI.Forms' host file dialogs: an untitled document
+// starts in the user's home, a titled one in its folder; a choice opens or
+// saves the file; a cancel changes nothing.
+std::string utf8_of(const std::filesystem::path &path) {
+    const std::u8string bytes = path.u8string();
+    const std::string result(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+    return result;
 }
-void verify_picker_directory_links() {
-    // The owner's Mac regression must execute real links, never skip them.
+void verify_file_dialogs() {
     const std::filesystem::path directory =
         std::filesystem::canonical(std::filesystem::temp_directory_path()) /
-        ("swiftedit-picker-links-" + std::to_string(test_process_id()));
-    check(std::filesystem::create_directory(directory), "Unique picker link fixture");
+        ("swiftedit-file-dialogs-" + std::to_string(test_process_id()));
+    check(std::filesystem::create_directory(directory), "Own file dialog fixture");
     struct Cleanup {
         std::filesystem::path directory{};
         ~Cleanup() {
@@ -412,43 +464,50 @@ void verify_picker_directory_links() {
             std::filesystem::remove_all(directory, ignored);
         }
     } cleanup{directory};
-    const std::filesystem::path target = directory / "target";
-    const std::filesystem::path alias = directory / "alias";
-    check(std::filesystem::create_directory(target), "Create picker target directory");
-    std::filesystem::create_directory_symlink(target, alias);
-    const std::u8string alias_utf8 = alias.u8string();
-    const std::u8string target_utf8 = target.u8string();
-    const std::u8string home_utf8 = notepad::user_home_directory().u8string();
-    const std::string alias_text(reinterpret_cast<const char *>(alias_utf8.data()),
-                                 alias_utf8.size());
-    const std::string expected(reinterpret_cast<const char *>(target_utf8.data()),
-                               target_utf8.size());
-    const std::string expected_home(reinterpret_cast<const char *>(home_utf8.data()),
-                                    home_utf8.size());
+    const std::filesystem::path source = directory / "sheet.theme.css";
+    static_cast<void>(notepad::write_file(source, "a { b: c; }\n", {}));
     const std::shared_ptr<notepad::Editor> editor =
-        gf::make_control<notepad::Editor>(gf::StableId("links.editor"));
+        gf::make_control<notepad::Editor>(gf::StableId("file-dialogs.editor"));
     std::vector<gf::ApplicationWindow> windows = (*editor).application_windows({});
-    std::size_t checked = 0;
-    for (gf::ApplicationWindow &entry : windows) {
-        if (entry.stable_id != "notepad.open-picker" && entry.stable_id != "notepad.save-picker")
-            continue;
-        gf::Window &window = *entry.model;
-        entry.options.ready(window, {});
-        window.perform_layout();
-        const std::shared_ptr<gf::TextBox> path =
-            std::dynamic_pointer_cast<gf::TextBox>(window.find("file-manager.picker.path"));
-        const std::shared_ptr<gf::Button> home =
-            std::dynamic_pointer_cast<gf::Button>(window.find("file-manager.picker.root"));
-        check(path && home, "Picker navigation controls exist");
-        (*path).set_text(alias_text);
-        check(window.request_focus(path), "Focus picker path entry");
-        window.dispatch_key({gf::KeyAction::down, gf::PhysicalKey::enter});
-        check((*path).text() == expected, "Open and Save path entry follows directory link");
-        check((*home).perform_click() && (*path).text() == expected_home,
-              "Home after link navigation still returns to the real user home");
-        ++checked;
-    }
-    check(checked == 2, "Both consumer picker profiles navigate a real directory link");
+    check(windows.front().stable_id == "notepad.main", "The main window comes first");
+    for (const gf::ApplicationWindow &entry : windows)
+        check(entry.stable_id.find("picker") == std::string::npos, "No picker windows remain");
+    gf::Window &window = *windows.front().model;
+    TestServices services{};
+    gf::HostSession host(window, capabilities(), &services);
+    const gf::HostDispatchResult attached = host.dispatch({1, 0, gf::HostAttachEvent{{800, 600}, 1}});
+    check(attached.accepted(), "File dialog host attached");
+    windows.front().options.ready(window, {});
+    window.perform_layout();
+
+    (*editor).execute("open");
+    check(services.last_open.initial_directory == utf8_of(std::filesystem::canonical(notepad::user_home_directory())),
+          "An untitled document opens from the user's home");
+    check(!services.last_open.filters.empty() && !services.last_open.allow_multiple,
+          "Open offers the filters and one file");
+    check((*editor).document().path.empty(), "A cancelled Open changes nothing");
+
+    services.paths.push_back(utf8_of(source));
+    (*editor).execute("open");
+    check((*editor).document().path == source && (*(*editor).text_control()).text.read() == "a { b: c; }\n",
+          "The chosen file opens");
+    check((*editor).code_document().language().name() == "css", "Its extension chooses the language");
+
+    const std::filesystem::path copy = directory / "copy.css";
+    services.paths.push_back(utf8_of(copy));
+    (*editor).execute("save-as");
+    check(services.last_save.initial_directory == utf8_of(directory) &&
+              services.last_save.suggested_name == "sheet.theme.css" && !services.last_save.confirm_overwrite,
+          "Save As starts in the document's folder with its name; the editor confirms overwrites itself");
+    check(notepad::read_file(copy).bytes == "a { b: c; }\n" && (*editor).document().path == copy,
+          "Save As writes the chosen file");
+
+    services.paths.push_back(utf8_of(source));
+    services.choices.push_back(gf::HostDialogChoice::no);
+    (*(*editor).text_control()).text = "changed\n";
+    (*editor).execute("save-as");
+    check(notepad::read_file(source).bytes == "a { b: c; }\n" && services.last_message.find("Replace") == 0U,
+          "Declining the overwrite keeps the existing file");
 }
 void verify_callback_revocation() {
     std::shared_ptr<notepad::Editor> editor =
@@ -496,122 +555,6 @@ void verify_callback_revocation() {
     retained_closing(expired_close);
     check(!expired_close.cancel, "Retained closing callback ignores destroyed editor");
 }
-// Explicit adoption probe: invoke with --picker-file-links after installing the
-// corrected public picker SDK. The currently pinned SDK does not support this.
-#ifdef _WIN32
-std::vector<unsigned char> file_link_data(const std::filesystem::path &path) {
-    const HANDLE handle = CreateFileW(path.c_str(), 0,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-        FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-    check(handle != INVALID_HANDLE_VALUE, "Open fixture reparse point");
-    struct Close {
-        HANDLE handle{};
-        ~Close() { CloseHandle(handle); }
-    } close{handle};
-    FILE_ATTRIBUTE_TAG_INFO tag{};
-    check(GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &tag, sizeof(tag)) != 0 &&
-              tag.ReparseTag == IO_REPARSE_TAG_SYMLINK,
-          "Fixture remains a native symbolic link");
-    std::vector<unsigned char> bytes(MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
-    DWORD count = 0;
-    check(DeviceIoControl(handle, FSCTL_GET_REPARSE_POINT, nullptr, 0, bytes.data(),
-                          static_cast<DWORD>(bytes.size()), &count, nullptr) != 0,
-          "Read fixture symbolic-link target data");
-    bytes.resize(count);
-    return bytes;
-}
-#endif
-void verify_picker_file_links() {
-    const std::filesystem::path directory =
-        std::filesystem::canonical(std::filesystem::temp_directory_path()) /
-        ("swiftedit-picker-file-links-" + std::to_string(test_process_id()));
-    check(std::filesystem::create_directory(directory), "Unique file-link fixture");
-    struct Cleanup {
-        std::filesystem::path directory{};
-        ~Cleanup() {
-            std::error_code ignored{};
-            std::filesystem::remove_all(directory, ignored);
-        }
-    } cleanup{directory};
-    check(std::filesystem::create_directory(directory / "target"), "Create target directory");
-    const std::filesystem::path target = directory / "target" / "document.txt";
-    const std::filesystem::path alias = directory / "linked.txt";
-    const notepad::FileSnapshot initial = notepad::write_file(target, "linked original\n", {});
-    check(initial.exists, "Create linked document");
-    const std::filesystem::path relative_target = std::filesystem::path("target") / "document.txt";
-#ifdef _WIN32
-    // MinGW's std::filesystem implementation can omit symlink creation even
-    // when Windows supports it. Both attempts create a real file symlink.
-    bool linked = CreateSymbolicLinkW(alias.c_str(), relative_target.c_str(),
-                                     SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE) != 0;
-    if (!linked)
-        linked = CreateSymbolicLinkW(alias.c_str(), relative_target.c_str(), 0) != 0;
-    if (!linked) {
-        const DWORD error = GetLastError();
-        throw std::runtime_error("Cannot create file-link fixture: Windows error " +
-                                 std::to_string(error));
-    }
-    const std::vector<unsigned char> original_link = file_link_data(alias);
-#else
-    std::filesystem::create_symlink(relative_target, alias);
-#endif
-    const std::shared_ptr<notepad::Editor> editor =
-        gf::make_control<notepad::Editor>(gf::StableId("file-links.editor"));
-    std::vector<gf::ApplicationWindow> windows = (*editor).application_windows({});
-    gf::Window *picker = nullptr;
-    for (gf::ApplicationWindow &entry : windows) {
-        if (entry.stable_id == "notepad.main" || entry.stable_id == "notepad.open-picker") {
-            entry.options.ready(*entry.model, {});
-            (*entry.model).perform_layout();
-        }
-        if (entry.stable_id == "notepad.open-picker")
-            picker = entry.model.get();
-    }
-    check(picker != nullptr, "Open picker exists");
-    gf::Window &window = *picker;
-    const std::shared_ptr<gf::TextBox> path =
-        std::dynamic_pointer_cast<gf::TextBox>(window.find("file-manager.picker.path"));
-    const std::shared_ptr<gf::ObjectView> objects =
-        std::dynamic_pointer_cast<gf::ObjectView>(window.find("file-manager.picker.objects"));
-    const std::shared_ptr<gf::Button> accept =
-        std::dynamic_pointer_cast<gf::Button>(window.find("file-manager.picker.accept"));
-    check(path && objects && accept, "Open picker controls exist");
-    (*path).set_text(notepad::path_utf8(directory));
-    check(window.request_focus(path), "Focus file-link directory path");
-    window.dispatch_key({gf::KeyAction::down, gf::PhysicalKey::enter});
-    std::string id{};
-    bool enabled = false;
-    for (const gf::ObjectViewItem &item : (*objects).items()) {
-        if (item.name == "linked.txt") {
-            id = item.stable_id;
-            enabled = item.enabled;
-        }
-    }
-    check(!id.empty() && enabled, "Relative file symlink is selectable");
-    (*objects).set_selected_ids({id});
-    check((*accept).perform_click(), "Activate Open on linked file");
-    gf::TextBox &text = *(*editor).text_control();
-    check(text.text() == "linked original\n" && (*editor).document().path == target,
-          "Picker opens resolved target in SwiftEdit");
-    text.select_all();
-    text.replace_selection("linked revised\n");
-    (*editor).execute("save");
-    const notepad::FileSnapshot saved = notepad::read_file(target);
-    check(saved.bytes == "linked revised\n" && !(*editor).document().dirty(text.text()),
-          "Save updates the resolved target");
-#ifdef _WIN32
-    check(file_link_data(alias) == original_link,
-          "Save preserves the exact native symlink target and flags");
-    std::ifstream through_alias(alias, std::ios::binary);
-    std::string alias_line{};
-    std::getline(through_alias, alias_line);
-    check(alias_line == "linked revised" && through_alias.peek() == std::char_traits<char>::eof(),
-          "Preserved alias reads the saved target contents");
-#else
-    check(std::filesystem::is_symlink(alias), "Save preserves the symbolic link");
-    check(std::filesystem::canonical(alias) == target, "Preserved link resolves to target");
-#endif
-}
 void verify_grapheme_status() {
     const std::shared_ptr<notepad::Editor> editor =
         gf::make_control<notepad::Editor>(gf::StableId("test.status-editor"));
@@ -621,35 +564,35 @@ void verify_grapheme_status() {
         std::dynamic_pointer_cast<gf::Label>(window.find("notepad.status"));
     check(status != nullptr, "Status label exists");
     const std::string first_line = "e\xcc\x81\xf0\x9f\x91\xa9\xe2\x80\x8d\xf0\x9f\x92\xbb";
-    (*text).set_text(first_line + "\r\nx\rz\n");
+    (*text).text = first_line + "\r\nx\rz\n";
     (*text).select(gf::Utf8Offset(3), gf::Utf8Offset(3));
-    check((*status).text().starts_with("Ln 1, Col 2 |"),
+    check((*status).text.read().starts_with("Ln 1, Col 2 |"),
           "Combining sequence advances one displayed character column");
     (*text).select(gf::Utf8Offset(first_line.size()), gf::Utf8Offset(first_line.size()));
-    check((*status).text().starts_with("Ln 1, Col 3 |"),
+    check((*status).text.read().starts_with("Ln 1, Col 3 |"),
           "Joined emoji advances one displayed character column");
     const gf::Utf8Offset second_line(first_line.size() + 2);
     (*text).select(second_line, second_line);
-    check((*status).text().starts_with("Ln 2, Col 1 |"), "CRLF is one line break");
-    const gf::Utf8Offset end((*text).text().size());
+    check((*status).text.read().starts_with("Ln 2, Col 1 |"), "CRLF is one line break");
+    const gf::Utf8Offset end((*text).text.read().size());
     (*text).select(end, end);
-    check((*status).text().starts_with("Ln 4, Col 1 |"),
+    check((*status).text.read().starts_with("Ln 4, Col 1 |"),
           "Mixed endings and trailing empty line use indexed line starts");
-    (*text).set_text("");
-    check((*status).text().starts_with("Ln 1, Col 1 | 0 characters |"),
+    (*text).text = "";
+    check((*status).text.read().starts_with("Ln 1, Col 1 | 0 characters |"),
           "Empty document starts at line one column one");
-    (*text).set_text("abc");
+    (*text).text = "abc";
     (*text).select(gui_forms::Utf8Offset(0), gui_forms::Utf8Offset(3));
     (*text).replace_selection("e\xcc\x81");
-    check((*status).text().starts_with("Ln 1, Col 2 | 1 characters |"),
+    check((*status).text.read().starts_with("Ln 1, Col 2 | 1 characters |"),
           "Same-byte-length edit refreshes grapheme metadata before selection notification");
     (*editor).execute("undo");
-    check((*status).text().find("3 characters |") != std::string::npos,
+    check((*status).text.read().find("3 characters |") != std::string::npos,
           "Undo refreshes cached character metadata");
-    (*text).set_text("x\n");
-    (*text).set_text("x\r");
+    (*text).text = "x\n";
+    (*text).text = "x\r";
     (*text).select(gui_forms::Utf8Offset(0), gui_forms::Utf8Offset(0));
-    check((*status).text().starts_with("Ln 1, Col 1 |") && (*status).text().ends_with(" | CR"),
+    check((*status).text.read().starts_with("Ln 1, Col 1 |") && (*status).text.read().find(" | CR | ") != std::string::npos,
           "Caret-only update retains the latest same-length ending change");
 }
 struct WindowLaunchProbe {
@@ -703,20 +646,20 @@ void verify_file_shortcuts() {
         key.modifiers = modifier;
         check(window.dispatch_key(key), "Control/Command Save handled");
         const notepad::FileSnapshot saved = notepad::read_file(path);
-        check(saved.bytes == replacement && !(*editor).document().dirty((*text).text()),
+        check(saved.bytes == replacement && !(*editor).document().dirty((*text).text.read()),
               "Control and Command Save use ordinary document publication");
         key.physical_key = gf::PhysicalKey::n;
         key.modifiers = modifier | gf::Modifier::shift;
         check(window.dispatch_key(key), "Control/Command Shift New Window handled");
         ++invocations;
-        check(launch.calls == invocations && (*text).text() == replacement,
+        check(launch.calls == invocations && (*text).text.read() == replacement,
               "New Window shortcut invokes once and preserves current source");
     }
     gf::KeyEvent create{};
     create.action = gf::KeyAction::down;
     create.physical_key = gf::PhysicalKey::n;
     create.modifiers = gf::Modifier::meta;
-    check(window.dispatch_key(create) && (*text).text().empty() && (*editor).document().path.empty(),
+    check(window.dispatch_key(create) && (*text).text.read().empty() && (*editor).document().path.empty(),
           "Command New opens an untitled document through the existing command");
     check(services.dialogs == 0, "Shortcut operations do not spuriously prompt");
     host.shutdown();
@@ -746,7 +689,7 @@ void verify_startup_rtf_summary() {
     check(attached.accepted(), "Startup RTF host attached");
     windows.front().options.ready(window, {});
     window.perform_layout();
-    check((*(*editor).text_control()).text().find("**bold**") != std::string::npos,
+    check((*(*editor).text_control()).text.read().find("**bold**") != std::string::npos,
           "Startup RTF opens as converted Markdown");
     static_cast<void>(window.drain_posted_work());
     check(services.dialogs == 0, "The import summary waits past the creation turn's posted work");
@@ -830,23 +773,17 @@ void verify_query_occurrence_history() {
           "Refused oversized insertion does not add undo history");
     host.shutdown();
 }
-int main(const int argc, char **const argv) {
+int main() {
     try {
-        if (argc == 2 && std::string_view(argv[1]) == "--picker-file-links") {
-            verify_picker_file_links();
-            std::cout << "Picker file-link open/edit/save probe passed\n";
-            return 0;
-        }
+        verify_theme_package();
         verify_view_menu_state();
+        verify_language_menu();
         verify_document_scrollbars();
         verify_query_occurrence_history();
         verify_callback_revocation();
         verify_file_shortcuts();
         verify_startup_rtf_summary();
-        verify_picker_home();
-#ifndef _WIN32
-        verify_picker_directory_links();
-#endif
+        verify_file_dialogs();
         verify_csv_keyboard_commands();
         verify_conflict_fields();
         verify_grapheme_status();
@@ -863,7 +800,7 @@ int main(const int argc, char **const argv) {
             host.dispatch({1, 0, gf::HostAttachEvent{{800, 600}, 1}});
         check(attached.accepted(), "Headless host attachment");
         const std::shared_ptr<gf::TextBox> text = (*editor).text_control();
-        check((*text).multiline() && (*text).accepts_tab(), "Multiline editor setup");
+        check((*text).multiline.read() && (*text).accepts_tab.read(), "Multiline editor setup");
         check(!find_control(editor, "notepad.document-name"), "No duplicate filename row");
         check((*text).absolute_bounds().y == 28, "Editor starts directly beneath the menu bar");
         window.request_focus(text);
@@ -872,7 +809,7 @@ int main(const int argc, char **const argv) {
         window.dispatch_key({gf::KeyAction::down, gf::PhysicalKey::enter});
         window.dispatch_text({"second"});
         const std::string entered = "first" + notepad::native_newline() + "second";
-        check((*text).text() == entered, "New-document Enter uses native endings");
+        check((*text).text.read() == entered, "New-document Enter uses native endings");
         (*editor).execute("select-all");
         const std::string selected = (*text).selected_text();
         check(selected == entered, "Select all");
@@ -880,39 +817,39 @@ int main(const int argc, char **const argv) {
         const int before_dialogs = services.dialogs;
         (*editor).execute("new-window");
         check(launch.calls == 1 && services.dialogs == before_dialogs &&
-                  (*text).text() == entered && (*text).selection() == before_window &&
-                  (*editor).document().dirty((*text).text()),
+                  (*text).text.read() == entered && (*text).selection() == before_window &&
+                  (*editor).document().dirty((*text).text.read()),
               "New Window leaves dirty document and selection untouched without save prompt");
         launch.fail = true;
         (*editor).execute("new-window");
         check(launch.calls == 2 && services.last_message == "Test window launch failure" &&
-                  (*text).text() == entered && (*text).selection() == before_window,
+                  (*text).text.read() == entered && (*text).selection() == before_window,
               "New Window reports launch failure without altering the document");
         launch.fail = false;
         const gf::TextSelection count_selection = (*text).selection();
-        const bool count_dirty = (*editor).document().dirty((*text).text());
+        const bool count_dirty = (*editor).document().dirty((*text).text.read());
         (*editor).execute("word-count");
         check(services.last_message.starts_with("Document: 2 words\nSelection: 2 words"),
               "Word Count reports document and selected text");
-        check((*text).text() == selected && (*text).selection() == count_selection,
+        check((*text).text.read() == selected && (*text).selection() == count_selection,
               "Word Count preserves text and selection");
-        check((*editor).document().dirty((*text).text()) == count_dirty,
+        check((*editor).document().dirty((*text).text.read()) == count_dirty,
               "Word Count preserves save state");
         (*text).replace_selection("replacement");
         (*editor).execute("undo");
-        check((*text).text() == entered, "Menu undo");
+        check((*text).text.read() == entered, "Menu undo");
         (*editor).execute("redo");
-        check((*text).text() == "replacement", "Menu redo");
+        check((*text).text.read() == "replacement", "Menu redo");
         (*editor).execute("select-all");
         (*editor).execute("copy");
         check(services.clipboard == "replacement", "Copy uses host clipboard");
         (*editor).execute("cut");
-        check((*text).text().empty(), "Cut");
+        check((*text).text.read().empty(), "Cut");
         (*editor).execute("paste");
-        check((*text).text() == "replacement", "Paste");
+        check((*text).text.read() == "replacement", "Paste");
         (*editor).execute("wrap");
-        check((*text).word_wrap(), "Word wrap menu");
-        const std::string before_scale = std::string((*text).text());
+        check((*text).word_wrap.read(), "Word wrap menu");
+        const std::string before_scale = std::string((*text).text.read());
         const gf::TextSelection selection_before_scale = (*text).selection();
         window.set_scale(1.5);
         window.perform_layout();
@@ -922,7 +859,7 @@ int main(const int argc, char **const argv) {
         static_cast<void>((*text).visual_line_count());
         window.set_scale(1.0);
         window.perform_layout();
-        check((*text).text() == before_scale && (*text).selection() == selection_before_scale,
+        check((*text).text.read() == before_scale && (*text).selection() == selection_before_scale,
               "DPI transitions preserve document and selection");
         const std::filesystem::path path =
             std::filesystem::temp_directory_path() /
@@ -941,30 +878,30 @@ int main(const int argc, char **const argv) {
             out << "one\ntwo\r\nthree\r";
         }
         (*editor).open_file(path);
-        check((*text).text() == "one\ntwo\r\nthree\r", "Open mixed endings unchanged");
+        check((*text).text.read() == "one\ntwo\r\nthree\r", "Open mixed endings unchanged");
         check(!(*text).can_undo(), "Open resets undo history");
         (*text).select_all();
         (*text).replace_selection("changed\n");
         (*editor).execute("save");
         const notepad::FileSnapshot observed_1 = notepad::read_file(path);
         check(observed_1.bytes == "changed\n", "Menu save exact bytes");
-        check(!(*editor).document().dirty((*text).text()), "Save updates clean boundary");
+        check(!(*editor).document().dirty((*text).text.read()), "Save updates clean boundary");
         (*editor).execute("undo");
-        check(!(*editor).document().dirty((*text).text()) && !(*text).can_undo(),
+        check(!(*editor).document().dirty((*text).text.read()) && !(*text).can_undo(),
               "Save establishes undo boundary");
         services.choices.push_back(gf::HostDialogChoice::yes);
         (*editor).execute("restore-opened");
-        check((*text).text() == "one\ntwo\r\nthree\r", "Original opened snapshot survives save");
+        check((*text).text.read() == "one\ntwo\r\nthree\r", "Original opened snapshot survives save");
         (*editor).execute("newline-lf");
-        check((*text).text() == "one\ntwo\nthree\n", "Explicit newline conversion");
+        check((*text).text.read() == "one\ntwo\nthree\n", "Explicit newline conversion");
         (*editor).execute("undo");
-        check((*text).text() == "one\ntwo\r\nthree\r", "Newline conversion is one undo action");
+        check((*text).text.read() == "one\ntwo\r\nthree\r", "Newline conversion is one undo action");
         (*editor).execute("save");
-        check((*editor).save_choice_pending() && !(*editor).enabled(),
+        check((*editor).save_choice_pending() && !(*editor).enabled.read(),
               "Mixed save presents an owned choice before changing text or disk");
         check(notepad::read_file(path).bytes == "changed\n", "Pending mixed choice does not write");
         (*editor).execute("cancel-save");
-        check(!(*editor).save_choice_pending() && (*editor).enabled() && (*text).can_undo(),
+        check(!(*editor).save_choice_pending() && (*editor).enabled.read() && (*text).can_undo(),
               "Mixed save cancellation preserves history and restores editor authority");
         (*editor).execute("save");
         (*editor).execute("save-as-is");
@@ -974,8 +911,8 @@ int main(const int argc, char **const argv) {
         (*text).replace_selection("prefix ");
         (*editor).execute("save");
         (*editor).execute("save-normalized");
-        check((*text).text() == "prefix one\ntwo\nthree\n" &&
-                  notepad::read_file(path).bytes == (*text).text() && !(*text).can_undo(),
+        check((*text).text.read() == "prefix one\ntwo\nthree\n" &&
+                  notepad::read_file(path).bytes == (*text).text.read() && !(*text).can_undo(),
               "Convert to document default publishes and displays exactly the normalized text");
         services.choices.push_back(gf::HostDialogChoice::yes);
         (*editor).execute("restore-opened");
@@ -985,11 +922,11 @@ int main(const int argc, char **const argv) {
             changed_destination << "external during choice";
         }
         (*editor).execute("save-normalized");
-        check((*text).text() == "one\ntwo\r\nthree\r" && (*text).can_undo() &&
+        check((*text).text.read() == "one\ntwo\r\nthree\r" && (*text).can_undo() &&
                   notepad::read_file(path).bytes == "external during choice",
               "Destination race refuses normalization/save without losing source or undo");
         (*editor).execute("save");
-        check((*editor).conflict_pending() && !(*editor).enabled(),
+        check((*editor).conflict_pending() && !(*editor).enabled.read(),
               "External change opens first-stage conflict choice");
         (*editor).execute("conflict-save");
         check(notepad::read_file(path).bytes == "external during choice",
@@ -1006,7 +943,7 @@ int main(const int argc, char **const argv) {
               "Conflict review race preserves source, history and external file");
         (*editor).execute("conflict-review");
         (*editor).execute("conflict-save");
-        check(!(*editor).conflict_pending() && (*editor).enabled() && !(*text).can_undo() &&
+        check(!(*editor).conflict_pending() && (*editor).enabled.read() && !(*text).can_undo() &&
                   notepad::read_file(path).bytes == "one\ntwo\r\nthree\r",
               "Explicit reviewed overwrite preserves mixed endings and clears history on success");
         (*text).select_all();
@@ -1017,7 +954,7 @@ int main(const int argc, char **const argv) {
         services.clipboard = std::string(500001, 'x');
         services.choices.push_back(gf::HostDialogChoice::no);
         (*editor).execute("paste");
-        check((*text).text() == "one\ntwo\r\nthree\r", "Large paste cancellation preserves text");
+        check((*text).text.read() == "one\ntwo\r\nthree\r", "Large paste cancellation preserves text");
         {
             std::ofstream out(path, std::ios::binary);
             out << std::string(5000, 'x');
@@ -1028,19 +965,19 @@ int main(const int argc, char **const argv) {
         } catch (const std::exception &) {
             refused = true;
         }
-        check(refused && (*text).text() == "one\ntwo\r\nthree\r",
+        check(refused && (*text).text.read() == "one\ntwo\r\nthree\r",
               "Oversize line open preserves current document");
         services.choices.push_back(gf::HostDialogChoice::cancel);
         (*editor).execute("new");
-        check((*text).text() == "one\ntwo\r\nthree\r", "Unsaved Cancel preserves document");
+        check((*text).text.read() == "one\ntwo\r\nthree\r", "Unsaved Cancel preserves document");
         services.choices.push_back(gf::HostDialogChoice::yes);
         (*editor).execute(
             "new"); // External file was replaced with long-line fixture: save must fail.
-        check((*text).text() == "one\ntwo\r\nthree\r", "Failed unsaved Save cancels New");
+        check((*text).text.read() == "one\ntwo\r\nthree\r", "Failed unsaved Save cancels New");
         (*editor).execute("cancel-save");
         services.choices.push_back(gf::HostDialogChoice::no);
         (*editor).execute("new");
-        check((*text).text().empty() && (*editor).document().path.empty(),
+        check((*text).text.read().empty() && (*editor).document().path.empty(),
               "Unsaved Discard permits New");
         const std::filesystem::path csv_path = path.string() + ".csv";
         struct CsvCleanup {
@@ -1057,15 +994,15 @@ int main(const int argc, char **const argv) {
         (*editor).open_file(csv_path);
         (*editor).execute("csv-view");
         const std::shared_ptr<notepad::CsvView> grid = (*editor).csv_control();
-        check((*grid).visible() && !(*text).visible(), "CSV table replaces source presentation");
+        check((*grid).visible.read() && !(*text).visible.read(), "CSV table replaces source presentation");
         (*grid).select_cell({0, 1});
         (*grid).commit_cell("=A1*4");
-        check((*text).text() == "2,=A1*4\r\n4,5", "Enter stores formula source");
+        check((*text).text.read() == "2,=A1*4\r\n4,5", "Enter stores formula source");
         (*editor).execute("csv-convert-value");
         settle_csv(*grid);
-        check((*text).text() == "2,8\r\n4,5", "CSV menu converts formula to value");
+        check((*text).text.read() == "2,8\r\n4,5", "CSV menu converts formula to value");
         (*editor).execute("undo");
-        check((*text).text() == "2,=A1*4\r\n4,5", "Conversion is one undo step");
+        check((*text).text.read() == "2,=A1*4\r\n4,5", "Conversion is one undo step");
         const std::vector<gf::MenuItemSpec> &context_items = (*grid).context_menu().items();
         check(context_items.size() == 1 && context_items[0].text == "Convert to Value",
               "Cell context menu includes Convert to Value");
@@ -1079,21 +1016,21 @@ int main(const int argc, char **const argv) {
         check((*grid).context_menu().is_open(), "Right click opens the cell menu");
         const bool context_executed = (*context_items[0].command).execute("csv.context");
         settle_csv(*grid);
-        check(context_executed && (*text).text() == "2,8\r\n4,5",
+        check(context_executed && (*text).text.read() == "2,8\r\n4,5",
               "Context menu invokes the same conversion operation");
         (*grid).context_menu().close();
         (*editor).execute("undo");
         (*editor).execute("copy");
         check(services.clipboard == "=A1*4", "Grid copy uses selected cell source");
         (*grid).commit_cell("=B1");
-        const std::string cyclic_source((*text).text());
+        const std::string cyclic_source((*text).text.read());
         (*grid).convert_to_value();
         settle_csv(*grid);
-        check((*text).text() == cyclic_source, "Conversion error preserves formula source");
+        check((*text).text.read() == cyclic_source, "Conversion error preserves formula source");
         check((*grid).status().find("Circular") != std::string::npos,
               "Grid exposes formula conversion error");
         (*editor).execute("csv-clear");
-        check((*text).text() == "2,\r\n4,5", "Grid Delete clears contents without shifting");
+        check((*text).text.read() == "2,\r\n4,5", "Grid Delete clears contents without shifting");
         const gf::TextSelection hidden_selection = (*text).selection();
         (*editor).execute("select-all");
         check((*text).selection() == hidden_selection,
@@ -1101,34 +1038,34 @@ int main(const int argc, char **const argv) {
         (*editor).execute("copy");
         check(services.clipboard == "2\t\r\n4\t5", "CSV Select All copies every cell");
         (*editor).execute("delete");
-        check((*text).text() == ",\r\n,", "CSV Select All Delete preserves table structure");
+        check((*text).text.read() == ",\r\n,", "CSV Select All Delete preserves table structure");
         (*editor).execute("undo");
-        check((*text).text() == "2,\r\n4,5", "Clearing the table is one undoable edit");
-        (*text).set_text("a,b,c\r\nd\ne,f");
+        check((*text).text.read() == "2,\r\n4,5", "Clearing the table is one undoable edit");
+        (*text).text = "a,b,c\r\nd\ne,f";
         (*editor).execute("select-all");
         (*editor).execute("copy");
         check(services.clipboard == "a\tb\tc\r\nd\r\ne\tf",
               "Select All copies ragged rows without inventing trailing fields");
         (*editor).execute("delete");
-        check((*text).text() == ",,\r\n\n,", "Select All clears all existing ragged cells");
+        check((*text).text.read() == ",,\r\n\n,", "Select All clears all existing ragged cells");
         (*editor).execute("undo");
-        check((*text).text() == "a,b,c\r\nd\ne,f", "Ragged clear restores with one undo");
+        check((*text).text.read() == "a,b,c\r\nd\ne,f", "Ragged clear restores with one undo");
         (*editor).execute("select-all");
         (*grid).select_cell({2, 1});
         (*editor).execute("copy");
         check(services.clipboard == "f", "Selecting a cell leaves whole-table selection");
         (*editor).execute("csv-view");
-        check((*text).visible(), "Source toggle restores plain text view");
-        const std::string before_render((*text).text());
+        check((*text).visible.read(), "Source toggle restores plain text view");
+        const std::string before_render((*text).text.read());
         const gf::TextSelection before_render_selection = (*text).selection();
         (*editor).execute("markdown-view");
-        check(!(*text).visible(), "Rendered Markdown replaces source presentation");
+        check(!(*text).visible.read(), "Rendered Markdown replaces source presentation");
         (*editor).execute("markdown-view");
-        check((*text).text() == before_render && (*text).selection() == before_render_selection,
+        check((*text).text.read() == before_render && (*text).selection() == before_render_selection,
               "Markdown toggle preserves source and selection");
-        (*text).set_text("a?c a\xc3\xa9"
+        (*text).text = "a?c a\xc3\xa9"
                          "c ae\xcc\x81"
-                         "c aZZc");
+                         "c aZZc";
         const std::shared_ptr<notepad::QueryField> query = (*editor).query_control();
         (*query).set_text("a?c");
         (*text).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
@@ -1146,7 +1083,7 @@ int main(const int argc, char **const argv) {
         (*editor).execute("find-next");
         check((*text).selected_text() == "a?c", "Wildcard skips two-character gap and wraps");
         std::string repeated_line(4000, 'a');
-        (*text).set_text(repeated_line);
+        (*text).text = repeated_line;
         (*text).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
         (*query).set_text(std::string(127, 'a') + "b");
         (*editor).execute("find-next");
@@ -1164,54 +1101,54 @@ int main(const int argc, char **const argv) {
         check(!(*editor).search_pending() && (*text).selection().caret.value() == 1,
               "Moving the caret cancels pending search without overriding navigation");
         const std::string replacement_source(3000, 'a');
-        (*text).set_text(replacement_source);
+        (*text).text = replacement_source;
         (*query).set_text("a");
         const std::shared_ptr<gf::TextBox> replacement = (*editor).replacement_control();
-        (*replacement).set_text("b");
+        (*replacement).text = "b";
         (*editor).execute("replace-all");
-        check((*editor).search_pending() && (*text).text() == replacement_source,
+        check((*editor).search_pending() && (*text).text.read() == replacement_source,
               "Replace All yields without publishing partial document changes");
-        (*replacement).set_text("c");
+        (*replacement).text = "c";
         static_cast<void>(
             window.poll_frame_schedule(gf::FrameClock::now() + std::chrono::seconds(1)));
-        check(!(*editor).search_pending() && (*text).text() == replacement_source,
+        check(!(*editor).search_pending() && (*text).text.read() == replacement_source,
               "Changing replacement text cancels the prepared edit intact");
-        (*replacement).set_text("b");
+        (*replacement).text = "b";
         (*editor).execute("replace-all");
         for (std::size_t index = 0; (*editor).search_pending() && index < 20; ++index)
             static_cast<void>(
                 window.poll_frame_schedule(gf::FrameClock::now() + std::chrono::seconds(1)));
-        check(!(*editor).search_pending() && (*text).text() == std::string(3000, 'b'),
+        check(!(*editor).search_pending() && (*text).text.read() == std::string(3000, 'b'),
               "Scheduled Replace All publishes the complete result");
         (*editor).execute("undo");
-        check((*text).text() == replacement_source, "Scheduled Replace All is one undoable edit");
-        (*replacement).set_text("long");
+        check((*text).text.read() == replacement_source, "Scheduled Replace All is one undoable edit");
+        (*replacement).text = "long";
         const gf::TextSelection before_failed_replace = (*text).selection();
         (*editor).execute("replace-all");
         for (std::size_t index = 0; (*editor).search_pending() && index < 20; ++index)
             static_cast<void>(
                 window.poll_frame_schedule(gf::FrameClock::now() + std::chrono::seconds(1)));
-        check(!(*editor).search_pending() && (*text).text() == replacement_source &&
+        check(!(*editor).search_pending() && (*text).text.read() == replacement_source &&
                   (*text).selection() == before_failed_replace,
               "Oversized replacement line is refused without content or selection mutation");
-        (*text).set_text("e\xcc\x81");
+        (*text).text = "e\xcc\x81";
         (*text).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
         const gf::TextSelection inspector_selection = (*text).selection();
         (*editor).execute("inspect-characters");
         check(services.last_message.find("COMBINING ACUTE ACCENT") != std::string::npos &&
                   services.last_message.find("U+0065") != std::string::npos,
               "Inspector at caret covers the complete combining grapheme");
-        check((*text).text() == "e\xcc\x81" && (*text).selection() == inspector_selection,
+        check((*text).text.read() == "e\xcc\x81" && (*text).selection() == inspector_selection,
               "Inspector preserves source and selection");
         const std::shared_ptr<notepad::CharacterPicker> ordinary_picker =
             (*editor).character_picker(false);
         (*ordinary_picker).select_codepoint(0x1f600);
         (*ordinary_picker).insert_selected();
-        check((*text).text() == "\xf0\x9f\x98\x80"
+        check((*text).text.read() == "\xf0\x9f\x98\x80"
                                 "e\xcc\x81",
               "Unicode picker inserts the exact supplementary scalar");
         (*editor).execute("undo");
-        check((*text).text() == "e\xcc\x81", "Character insertion is one undoable edit");
+        check((*text).text.read() == "e\xcc\x81", "Character insertion is one undoable edit");
         const std::shared_ptr<notepad::CharacterPicker> control_picker =
             (*editor).character_picker(true);
         (*control_picker).select_codepoint(0x202e);
@@ -1219,18 +1156,18 @@ int main(const int argc, char **const argv) {
                   (*control_picker).status().find("\xe2\x80\xae") == std::string::npos,
               "Control dialog explains the selected scalar without executing it in its labels");
         (*control_picker).insert_selected();
-        check((*text).text() == "\xe2\x80\xae"
+        check((*text).text.read() == "\xe2\x80\xae"
                                 "e\xcc\x81",
               "Explicit control insertion preserves literal source bytes");
         (*editor).execute("undo");
-        check((*text).text() == "e\xcc\x81", "Control insertion can be undone exactly");
+        check((*text).text.read() == "e\xcc\x81", "Control insertion can be undone exactly");
         bool separate_dialog = false;
         try {
             (*ordinary_picker).select_codepoint(0x202e);
         } catch (const std::runtime_error &) {
             separate_dialog = true;
         }
-        check(separate_dialog && (*text).text() == "e\xcc\x81",
+        check(separate_dialog && (*text).text.read() == "e\xcc\x81",
               "Ordinary picker refuses controls intact");
         {
             gf::Window character_window(ordinary_picker, {680, 600});
@@ -1239,7 +1176,7 @@ int main(const int argc, char **const argv) {
                 character_host.dispatch({1, 0, gf::HostAttachEvent{{680, 600}, 1}});
             check(attached_picker.accepted(), "Character dialog has shared host services");
             (*ordinary_picker).copy_selected();
-            check(services.clipboard == "\xf0\x9f\x98\x80" && (*text).text() == "e\xcc\x81",
+            check(services.clipboard == "\xf0\x9f\x98\x80" && (*text).text.read() == "e\xcc\x81",
                   "Unicode picker copies exact scalar without mutating the document");
             character_host.shutdown();
         }
@@ -1260,10 +1197,10 @@ int main(const int argc, char **const argv) {
             check(nul_copy_refused && services.clipboard == "preserved clipboard",
                   "NUL clipboard refusal preserves the existing clipboard");
             (*control_picker).insert_selected();
-            check((*text).text() == std::string("\0e\xcc\x81", 4),
+            check((*text).text.read() == std::string("\0e\xcc\x81", 4),
                   "NUL remains insertable as a literal source byte");
             (*editor).execute("undo");
-            check((*text).text() == "e\xcc\x81", "NUL insertion undoes without loss");
+            check((*text).text.read() == "e\xcc\x81", "NUL insertion undoes without loss");
             control_host.shutdown();
         }
         std::cout << "Editor headless tests passed: native control input routing, CRLF, menu "

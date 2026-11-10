@@ -37,7 +37,10 @@ public:
                                  std::move(windows[index].options.ready)});
             windows[index].options.ready = Ready{this, index};
         }
-        const gf::ApplicationResult result = gf::Application::run(std::move(windows));
+        gf::ApplicationCreateResult created = gf::Application::create(gf::ApplicationConfig{});
+        if (!created)
+            throw std::runtime_error("Cannot create the application.");
+        const gf::ApplicationResult result = (*created.application).run(std::move(windows));
         subscription_ = {};
         timer_.reset();
         if (result.callback_exception)

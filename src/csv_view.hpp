@@ -27,7 +27,9 @@ public:
     void on_pointer(gf::PointerEvent &) override;
     void on_key(gf::KeyEvent &) override;
     void on_focus_changed(bool) override;
-    void on_frame(gf::FrameTime) override;
+    // Advances pending calculations by one bounded slice. The view's own UI
+    // timer calls it; tests may call it to drive the work deterministically.
+    void on_frame(gf::FrameTime);
     void cancel_calculations();
     [[nodiscard]] bool calculations_pending() const { return next_calculation_ < calculations_.size(); }
     const std::string &status() const { return status_; }
@@ -46,6 +48,13 @@ private:
         std::weak_ptr<CsvView> owner{};
         void operator()(const double &) const;
     };
+    // The calculation timer's target: one slice per tick, then the tick
+    // ends itself (advance_view schedules the next when work remains).
+    struct CalculationTick {
+        std::weak_ptr<CsvView> owner{};
+        void operator()(gf::FrameTime) const;
+    };
+    void schedule_calculation();
     struct EntryListener {
         std::weak_ptr<CsvView> owner{};
         void operator()() const;

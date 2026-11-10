@@ -16,8 +16,8 @@ import and column resizing are not implemented.
 - The current GUI.Forms multiline provider has a 1 MiB UTF-8 document limit and
   4096-byte logical-line limit. Files beyond either limit are refused intact.
   This is a toolkit development bound, not a final product decision.
-- Plain-text GUI scrolling currently uses the mouse wheel and caret reveal,
-  without visible scrollbars. Markdown and CSV have their own scrollbars.
+- Plain-text GUI scrolling uses the document scrollbars, the mouse wheel and
+  caret reveal. Markdown and CSV have their own scrollbars.
   Tabs use four-space stops. Home/End address the visual row;
   Ctrl+Home/End address the document. Full bidi visual caret navigation, IME
   composition, accessibility text ranges and native screen-reader behavior
@@ -37,23 +37,22 @@ import and column resizing are not implemented.
   picker previews are inert, but full document presentation needs provider integration.
   NUL cannot be copied through the null-terminated Windows text clipboard; its
   picker Copy action refuses intact while Insert preserves the literal byte.
-- No printing/page setup, syntax
-  colors, settings persistence, recovery files, installer, file association or
+- Syntax colours (CSS and form languages) are painted as GUI.Forms styled
+  runs from a palette SwiftEdit holds; GUI.Forms 0.5 has no custom theme roles
+  for them. No printing/page setup, settings persistence, recovery files, installer, file association or
   OS-default changes.
 - External changes are checked during saving. There is no filesystem watcher,
   automatic reload or merge view. A conflict opens Save Over/New Copy, then editable
   filename/encoding/endings and a reviewed destination warning before explicit Save.
   Any intervening destination change is refused; there is no unchecked force-save.
-- Save As may ask for overwrite twice: the picker confirms its observation;
+- Save As may ask for overwrite twice: the host dialog confirms its observation;
   the writer obtains fresh byte/identity evidence and confirms that destination
   before writing. This conservative behavior avoids silently treating an old
-  picker observation as a durable reservation.
+  dialog observation as a durable reservation.
 - The save adapter refuses hard links, reparse paths and alternate stream paths.
   Existing security/stream metadata uses Windows ReplaceFile behavior, but a
   broad ACL/ADS/encryption/volume-failure corpus has not been measured. Power-loss
   recovery and the final name-replacement race are not eliminated.
-- File Manager picker enumeration remains synchronous. Very large or slow
-  directories may block that owned dialog; this is provider-owned work.
 - Development source now uses the reviewed aaca5d0 SDK for dynamic document
   titles and pointer/keyboard menu opening. The filename row is removed and its
   space returned to the document. Consumer native tests and packaging passed on

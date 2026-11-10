@@ -107,8 +107,8 @@ def prepare_runtime(gui: Path, jobs: str) -> None:
 # Local builds only: SWIFTEDIT_LOCKSTEP names the machine's lockstep record
 # (D:/malkuth/cache/lockstep/current-<target>.json), the one GUI.Forms build
 # every product on this machine shares. Its installed prefix carries GUI.Forms
-# and the stx packages, so only the picker is built here, in trees apart from
-# the pinned ones (picker-lockstep, sdk-lockstep, app-lockstep).
+# and the stx packages, so nothing is built here: the record is checked and
+# written to sdk-lockstep/manifest.json for Build-Native.py (app-lockstep).
 LOCKSTEP_VARIABLE: str = 'SWIFTEDIT_LOCKSTEP'
 LOCKSTEP_MODE: str = 'lockstep-installed-prefix'
 
@@ -124,45 +124,13 @@ def read_lockstep(platform: str) -> dict | None:
     return record
 
 
-def build_picker(picker: Path, tree: Path, sdk: Path, common: list[str], gui_prefix: Path, provider: str,
-                 platform: str, jobs: str) -> None:
-    """Builds the document picker against the GUI.Forms installed at gui_prefix into sdk/picker-sdk."""
-    consumption: Path = tree.parent / (tree.name + '-consumption.json')
-    consumption.parent.mkdir(parents=True, exist_ok=True)
-    consumption.write_text(json.dumps({'identity': {
-        'id': 'swiftedit-' + platform + '-' + provider,
-        'state': 'development', 'source_revision': provider},
-        'validation': 'Consumer tests must pass before packaging.'}, indent=2) + '\n')
-    run(['cmake', '-S', str(picker / 'frontend'), '-B', str(tree)] + common + [
-        '-DCMAKE_PREFIX_PATH=' + str(gui_prefix), '-DFILE_MANAGER_BUILD_TESTS=OFF',
-        '-DFILE_MANAGER_GUI_FORMS_MANIFEST=' + str(consumption)])
-    run(['cmake', '--build', str(tree), '--target', 'file_manager_document_picker_view', '--parallel', jobs])
-    run(['cmake', '--install', str(tree), '--prefix', str(sdk / 'picker-sdk'), '--component', 'DocumentPicker'])
-    notices: Path = sdk / 'picker-sdk/share/licenses/FileManagerDocumentPicker'
-    notices.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(picker / 'LICENSE', notices / 'LICENSE')
-
-
-def prepare_lockstep(record: dict, lock: dict, platform: str, jobs: str) -> None:
-    """Builds only the pinned picker against the lockstep prefix and records it in sdk-lockstep/manifest.json."""
-    picker: Path = ROOT / '.build/dependencies/file_manager'
-    source(picker, lock['picker_repository'], lock['picker_revision'])
-    run(['git', '-C', str(picker), 'submodule', 'update', '--init', '--depth', '1', '--', 'backend'])
+def prepare_lockstep(record: dict, platform: str) -> None:
+    """Records the lockstep prefix in sdk-lockstep/manifest.json; builds nothing."""
     build: Path = ROOT / ('.build/native-' + platform)
     sdk: Path = build / 'sdk-lockstep'
-    # The shared compiler cache, with SwiftEdit's own checkout as the base.
-    os.environ['CCACHE_DIR'] = record['ccache_dir']
-    os.environ['CCACHE_BASEDIR'] = str(ROOT)
-    os.environ['CCACHE_COMPILERCHECK'] = 'content'
-    if record['llvm_runtime']:
-        os.environ['GUI_FORMS_LLVM_RUNTIME'] = record['llvm_runtime']
-    common: list[str] = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
-        '-DCMAKE_TOOLCHAIN_FILE=' + record['toolchain_file'],
-        '-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
-        '-DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache']
+    sdk.mkdir(parents=True, exist_ok=True)
     provider: str = 'lockstep:' + record['commit']
-    build_picker(picker, build / 'picker-lockstep', sdk, common, Path(record['prefix']), provider, platform, jobs)
-    manifest: dict = {'provider_revision': provider, 'picker_revision': lock['picker_revision'],
+    manifest: dict = {'provider_revision': provider,
         'stx_rtf2md_revision': provider, 'gui_forms_prefix': record['prefix'],
         'toolchain_file': record['toolchain_file'], 'font_dir': record['font_dir'],
         'llvm_runtime': record['llvm_runtime'], 'ccache_dir': record['ccache_dir'],
@@ -186,10 +154,9 @@ def main() -> None:
     if lockstep is not None:
         if arguments.restore_cache or arguments.fetch_only:
             parser.error('a lockstep build fetches and restores nothing')
-        prepare_lockstep(lockstep, lock, arguments.platform, str(arguments.jobs))
+        prepare_lockstep(lockstep, arguments.platform)
         return
     gui: Path = ROOT / 'gui_forms'
-    picker: Path = ROOT / '.build/dependencies/file_manager'
     source(gui, lock['repository'], lock['revision'])
     # GUI.Forms' build tools forward to template_harness, which they look for
     # beside the checkout (gui_forms/tools/harness_link.py): here, at the root,
@@ -199,16 +166,6 @@ def main() -> None:
     if harness_lock['harness'] != provider_harness['harness']:
         raise ValueError('harness.lock differs from gui_forms/harness.lock at the GUI.Forms pin')
     source(ROOT / 'template_harness', harness_lock['harness']['repository'], harness_lock['harness']['commit'])
-    source(picker, lock['picker_repository'], lock['picker_revision'])
-    # The standalone stx_rtf2md package builds from the same GUI.Forms checkout.
-    # SWIFTEDIT_STX_RTF2MD_SOURCE may name a local tree containing stx_rtf2md/
-    # for development before a revision lands; the manifest then records it,
-    # and Build-Native.py refuses to package it.
-    stx_override: str = os.environ.get('SWIFTEDIT_STX_RTF2MD_SOURCE', '')
-    stx: Path = Path(stx_override) if stx_override else gui
-    # Frontend CMake declares the public backend client even for picker-only builds.
-    # Initialize its recorded gitlink, but do not build or package backend services.
-    run(['git', '-C', str(picker), 'submodule', 'update', '--init', '--depth', '1', '--', 'backend'])
     if arguments.restore_cache:
         restore_cache(arguments.platform, lock)
     if arguments.fetch_only:
@@ -222,50 +179,17 @@ def main() -> None:
     os.environ['CCACHE_DIR'] = str(ROOT / '.ccache')
     os.environ['CCACHE_BASEDIR'] = str(ROOT)
     os.environ['CCACHE_COMPILERCHECK'] = 'content'
-    os.environ['BUILD_JOBS'] = jobs
-    # The provider's renderer scripts inspect the environment before CMake runs.
     os.environ['CMAKE_C_COMPILER_LAUNCHER'] = 'ccache'
     os.environ['CMAKE_CXX_COMPILER_LAUNCHER'] = 'ccache'
     os.environ['CMAKE_OBJCXX_COMPILER_LAUNCHER'] = 'ccache'
-    common: list[str] = ['-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
-        '-DCMAKE_TOOLCHAIN_FILE=' + str(gui / 'cmake/llvm22.cmake'),
-        '-DCMAKE_C_COMPILER_LAUNCHER=ccache', '-DCMAKE_CXX_COMPILER_LAUNCHER=ccache',
-        '-DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache']
-    options: list[str] = ['-DCMAKE_INSTALL_LIBDIR=lib', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON',
-        '-DGUI_FORMS_BUILD_GALLERY=OFF', '-DGUI_FORMS_BUILD_TESTS=OFF', '-DGUI_FORMS_BUILD_AUDIO=ON',
-        '-DCMAKE_INSTALL_PREFIX=' + str(gui_sdk)]
-    if arguments.platform == 'windows-x64':
-        # The provider's Win32 host draws text with its HarfBuzz/FreeType engine (ADR-004).
-        run(['sh', str(gui / 'third_party/fetch_text_stack.sh')])
-        options.extend(['-DGUI_FORMS_ENABLE_SKIA=OFF', '-DGUI_FORMS_ENABLE_HARFBUZZ_TEXT=ON'])
-    else:
-        linux: bool = arguments.platform.startswith('linux-')
-        if linux:
-            os.environ['GUI_FORMS_SYSTEM_BUILD_TOOLS'] = '1'
-        run(['sh', str(gui / 'third_party/fetch_skia_cpu.sh')])
-        run(['sh', str(gui / 'third_party/fetch_text_stack.sh')])
-        skia: Path = build / 'skia'
-        # The Linux script builds for the host's architecture (x64 or arm64).
-        script: str = 'build_skia_cpu_linux.sh' if linux else 'build_skia_cpu.sh'
-        run(['sh', str(gui / 'third_party' / script), str(skia)])
-        options.extend(['-DGUI_FORMS_SKIA_PREBUILT=ON', '-DGUI_FORMS_SKIA_OUT=' + str(skia)])
-        if linux:
-            options.append('-DGUI_FORMS_ENABLE_LINUX_HOST=ON')
-    # The text engine's pinned UAX #14 line breaking (libunibreak), required
-    # wherever HarfBuzz text is on, which is now every platform.
-    run(['sh', str(gui / 'third_party/fetch_linebreak.sh')])
-    run(['cmake', '-S', str(gui), '-B', str(build / 'gui-forms')] + common + options)
-    run(['cmake', '--build', str(build / 'gui-forms'), '--parallel', jobs])
-    run(['cmake', '--install', str(build / 'gui-forms')])
-    build_picker(picker, build / 'picker', sdk, common, gui_sdk, lock['revision'], arguments.platform, jobs)
-    run(['cmake', '-S', str(stx / 'stx_rtf2md'), '-B', str(build / 'stx-rtf2md')] + common + [
-        '-DCMAKE_INSTALL_LIBDIR=lib', '-DCMAKE_POSITION_INDEPENDENT_CODE=ON', '-DSTX_RTF2MD_TESTS=OFF',
-        '-DCMAKE_INSTALL_PREFIX=' + str(sdk / 'stx-rtf2md-sdk')])
-    run(['cmake', '--build', str(build / 'stx-rtf2md'), '--parallel', jobs])
-    run(['cmake', '--install', str(build / 'stx-rtf2md')])
-    stx_revision: str = 'local:' + str(stx) if stx_override else lock['revision']
-    manifest: dict = {'provider_revision': lock['revision'], 'picker_revision': lock['picker_revision'],
-        'stx_rtf2md_revision': stx_revision,
+    # GUI.Forms' own SDK build: the CI configuration with every optional
+    # component, the renderer and the text sources from stx at its stx.lock
+    # commit, and the stx packages (stx_rtf2md among them) installed into the
+    # same prefix.
+    run([sys.executable, '-B', str(gui / 'tools/build_sdk.py'), '--target', arguments.platform,
+         '--prefix', str(gui_sdk), '--features', 'all', '--jobs', jobs, '--work', str(build / 'gui-forms')])
+    manifest: dict = {'provider_revision': lock['revision'],
+        'stx_rtf2md_revision': lock['revision'],
         'platform': arguments.platform, 'dependency_mode': 'pinned-source-public-installed-targets',
         'compiler': subprocess.check_output(['clang', '--version'], text=True).strip()}
     (sdk / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')

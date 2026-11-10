@@ -29,7 +29,9 @@ public:
         const bool pending = source_prepared_ && layout_dirty_;
         return pending;
     }
-    void on_frame(gf::FrameTime) override;
+    // Advances preparation and layout by one bounded slice; the view's UI
+    // timer (PreparationTick) calls it, and tests may drive it directly.
+    void on_frame(gf::FrameTime);
     gf::Size measure(gf::Size) override;
     void arrange(gf::Rect) override;
     void on_paint(gf::Painter &, gf::Rect) override;

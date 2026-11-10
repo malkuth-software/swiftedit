@@ -283,7 +283,7 @@ void verify_cached_conversion() {
                 std::dynamic_pointer_cast<gf::TextBox>(window.find("csv.entry"));
             check(static_cast<bool>(entry), "Conversion fixture has a cell entry");
             if (scenario == 6)
-                (*entry).set_text("=A1/4");
+                (*entry).text = "=A1/4";
             else
                 (*entry).cancelled().emit();
         }
@@ -317,7 +317,7 @@ void verify_entry_keys() {
     std::size_t cancellations = 0;
     const gf::SubscriptionToken cancelled = (*entry).cancelled().subscribe(RaisedCount{&cancellations});
     window.request_focus(entry);
-    (*entry).set_text("7");
+    (*entry).text = "7";
     const bool entered = window.dispatch_key({gf::KeyAction::down, gf::PhysicalKey::enter});
     check(entered && output == "1,7", "Enter in the cell entry stores the cell");
     output.clear();
@@ -421,14 +421,14 @@ void verify_csv_page_navigation() {
     const std::shared_ptr<gf::ScrollBar> vertical =
         std::dynamic_pointer_cast<gf::ScrollBar>(window.find("csv.vertical"));
     check(static_cast<bool>(window.find("csv.vertical")), "CSV vertical scrollbar is registered");
-    check(vertical && (*vertical).orientation() == gf::Orientation::vertical,
+    check(vertical && (*vertical).orientation.read() == gf::Orientation::vertical,
           "CSV scrollbar exposes the public vertical ScrollBar contract");
-    const double before = (*vertical).value();
+    const double before = (*vertical).value.read();
     gf::PointerEvent wheel{};
     wheel.action = gf::PointerAction::wheel;
     wheel.wheel_delta.x = 1;
     (*grid).on_pointer(wheel);
-    check((*vertical).value() == before, "Horizontal-only wheel never scrolls CSV upward");
+    check((*vertical).value.read() == before, "Horizontal-only wheel never scrolls CSV upward");
     key.physical_key = gf::PhysicalKey::page_up;
     key.modifiers = gf::Modifier::none;
     (*grid).on_key(key);
@@ -507,9 +507,9 @@ void verify_tall_markdown_visibility() {
               "Space-only layout runs do not submit native text drawing");
     const std::shared_ptr<gf::ScrollBar> scroll =
         std::dynamic_pointer_cast<gf::ScrollBar>(window.find("markdown.vertical"));
-    check(scroll && (*scroll).orientation() == gf::Orientation::vertical,
+    check(scroll && (*scroll).orientation.read() == gf::Orientation::vertical,
           "Tall Markdown has a vertical scrollbar");
-    (*scroll).set_value(3000);
+    (*scroll).value = 3000;
     ObservingPainter middle{};
     paint_markdown(*view, middle, {0, 0, 640, 140});
     check(middle.texts < 200 && middle.tall_rules == 1,
@@ -539,7 +539,7 @@ void verify_tall_markdown_visibility() {
     (*view).set_source(source);
     ObservingPainter table_initial{};
     paint_markdown(*view, table_initial, {0, 0, 640, 140});
-    (*scroll).set_value(3000);
+    (*scroll).value = 3000;
     ObservingPainter table_middle{};
     paint_markdown(*view, table_middle, {0, 0, 640, 140});
     check(table_middle.texts < 200 && table_middle.tall_borders == 1 && table_middle.tall_rules == 1,
@@ -690,7 +690,7 @@ int main() {
         grid_window.perform_layout();
         const std::shared_ptr<gf::ScrollBar> horizontal =
             std::dynamic_pointer_cast<gf::ScrollBar>(grid_window.find("csv.horizontal"));
-        check(horizontal && (*horizontal).orientation() == gf::Orientation::horizontal,
+        check(horizontal && (*horizontal).orientation.read() == gf::Orientation::horizontal,
               "CSV horizontal scrollbar exists");
         for (std::size_t column = 0; column < 5; ++column) {
             gf::KeyEvent right{};
@@ -698,25 +698,25 @@ int main() {
             (*grid).on_key(right);
             check(right.handled, "CSV arrow navigation handled");
         }
-        check((*grid).selected() == swiftedit::CellAddress{0, 5} && (*horizontal).value() == 1,
+        check((*grid).selected() == swiftedit::CellAddress{0, 5} && (*horizontal).value.read() == 1,
               "Selecting the partially visible sixth cell scrolls it fully into view");
         (*grid).select_cell({0, 7});
-        check((*horizontal).value() == 3, "Explicit cell selection also reveals its whole column");
+        check((*horizontal).value.read() == 3, "Explicit cell selection also reveals its whole column");
         (*grid).arrange({0, 0, 400, 600});
-        check((*horizontal).value() == 6,
+        check((*horizontal).value.read() == 6,
               "Narrowing the viewport retains whole selected-cell visibility");
         (*grid).arrange({0, 0, 1600, 600});
-        check((*horizontal).value() == 0, "Expanding to fit all columns resets horizontal offset");
+        check((*horizontal).value.read() == 0, "Expanding to fit all columns resets horizontal offset");
         (*grid).arrange({0, 0, 400, 600});
         (*grid).set_source("a,b");
-        check((*horizontal).value() == 0, "A smaller source resets obsolete horizontal extent");
+        check((*horizontal).value.read() == 0, "A smaller source resets obsolete horizontal extent");
         const std::shared_ptr<gf::ScrollBar> vertical =
             std::dynamic_pointer_cast<gf::ScrollBar>(grid_window.find("csv.vertical"));
         gf::PointerEvent fitting_wheel{};
         fitting_wheel.action = gf::PointerAction::wheel;
         fitting_wheel.wheel_delta.y = -1;
         (*grid).on_pointer(fitting_wheel);
-        check(vertical && (*vertical).orientation() == gf::Orientation::vertical && (*vertical).value() == 0,
+        check(vertical && (*vertical).orientation.read() == gf::Orientation::vertical && (*vertical).value.read() == 0,
               "Wheel input cannot scroll fitting rows into a disabled placeholder range");
         (*grid).set_source("a,b,c\r\nd\ne,f");
         for (const gf::Modifier modifier : {gf::Modifier::control, gf::Modifier::meta}) {
@@ -827,7 +827,7 @@ int main() {
         for (const gf::Control::Ptr &child : (*view).children()) {
             const std::shared_ptr<gf::ScrollBar> candidate =
                 std::dynamic_pointer_cast<gf::ScrollBar>(child);
-            if (candidate && (*candidate).orientation() == gf::Orientation::vertical)
+            if (candidate && (*candidate).orientation.read() == gf::Orientation::vertical)
                 markdown_scroll = candidate;
         }
         check(static_cast<bool>(markdown_scroll), "Markdown scrollbar exists");
@@ -836,30 +836,30 @@ int main() {
         navigation.action = gf::KeyAction::down;
         navigation.physical_key = gf::PhysicalKey::page_down;
         (*view).on_key(navigation);
-        check(navigation.handled && (*markdown_scroll).value() > 0 && (*view).hovered_url().empty(),
+        check(navigation.handled && (*markdown_scroll).value.read() > 0 && (*view).hovered_url().empty(),
               "Page Down scrolls rendered Markdown and revokes the stale hover");
         navigation.handled = false;
         navigation.physical_key = gf::PhysicalKey::home;
         navigation.modifiers = gf::Modifier::meta;
         (*view).on_key(navigation);
-        check(navigation.handled && (*markdown_scroll).value() == 0, "Mac document Home returns to preview start");
+        check(navigation.handled && (*markdown_scroll).value.read() == 0, "Mac document Home returns to preview start");
         navigation.physical_key = gf::PhysicalKey::end;
         navigation.modifiers = gf::Modifier::control;
         (*view).on_key(navigation);
-        const double preview_end = (*markdown_scroll).value();
+        const double preview_end = (*markdown_scroll).value.read();
         check(preview_end > 0, "Document End reaches preview bottom");
         navigation.physical_key = gf::PhysicalKey::down;
         navigation.modifiers = gf::Modifier::none;
         (*view).on_key(navigation);
-        check((*markdown_scroll).value() == preview_end, "Arrow scrolling clamps at preview bottom");
+        check((*markdown_scroll).value.read() == preview_end, "Arrow scrolling clamps at preview bottom");
         paint_markdown(*view, painter, {0, 0, 640, 90});
         check(painter.measurements == before_navigation, "Keyboard navigation reuses prepared Markdown geometry");
-        (*markdown_scroll).set_value(32);
+        (*markdown_scroll).value = 32;
         check((*view).hovered_url().empty(), "Scrolling clears the prior link tooltip");
         link_hover.position = {26, 20}; // The old link lies behind the fixed ruler.
         (*view).on_pointer(link_hover);
         check((*view).hovered_url().empty(), "Ruler cannot expose a clipped link tooltip");
-        (*markdown_scroll).set_value(0);
+        (*markdown_scroll).value = 0;
         link_hover.position = {26, 54};
         (*view).on_pointer(link_hover);
         check((*view).hovered_url() == "file:///first", "Visible link can be hovered again");
@@ -880,7 +880,7 @@ int main() {
         check(painter.translation.y == 28, "Fitting content cannot scroll into artificial range");
         navigation.physical_key = gf::PhysicalKey::page_down;
         (*view).on_key(navigation);
-        check((*markdown_scroll).value() == 0, "Keyboard cannot scroll fitting content into artificial range");
+        check((*markdown_scroll).value.read() == 0, "Keyboard cannot scroll fitting content into artificial range");
         (*view).arrange({0, 0, 640, 90});
         (*view).on_pointer(wheel);
         paint_markdown(*view, painter, {0, 0, 640, 90});

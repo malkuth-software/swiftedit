@@ -53,9 +53,9 @@ public:
     std::shared_ptr<notepad::Editor> editor{};
     gf::Window *main{};
     gf::Window *find_window{};
-    std::array<gf::ApplicationWindowHandle, 9> handles{};
-    std::array<unsigned, 9> close_count{};
-    std::array<WindowHooks, 9> hooks{};
+    std::array<gf::ApplicationWindowHandle, 7> handles{};
+    std::array<unsigned, 7> close_count{};
+    std::array<WindowHooks, 7> hooks{};
     gf::ApplicationWindowHandle main_handle{};
     std::size_t ready_count{};
     bool passed{};
@@ -76,7 +76,7 @@ public:
     void verify_title(const bool dirty, const bool untitled = false) const {
         const std::shared_ptr<gf::Label> status =
             std::dynamic_pointer_cast<gf::Label>(find_control(editor, "notepad.status"));
-        require(status && (*status).text().find("Native title update unavailable") == std::string::npos,
+        require(status && (*status).text.read().find("Native title update unavailable") == std::string::npos,
                 "Native title request accepted");
 #ifdef __APPLE__
         const std::string title = expected_title(dirty, untitled);
@@ -119,7 +119,7 @@ public:
             switch (current_stage) {
             case 0: {
                 if (!find_open_requested) {
-                    require((*(*editor).text_control()).text() == "native\r\nfixture",
+                    require((*(*editor).text_control()).text.read() == "native\r\nfixture",
                             "Native initial file");
                     verify_title(false);
                     require(!find_control(editor, "notepad.document-name"),
@@ -135,7 +135,7 @@ public:
                     (*(*editor).text_control()).select(gf::Utf8Offset(0), gf::Utf8Offset(6));
                     find_requested_at = std::chrono::steady_clock::now();
                     (*editor).execute("find");
-                    require(handles[3].active(), "Owned find window active");
+                    require(handles[1].active(), "Owned find window active");
                     const std::shared_ptr<notepad::QueryField> opened_query =
                         std::dynamic_pointer_cast<notepad::QueryField>(
                             find_control((*find_window).root(), "find.query"));
@@ -143,7 +143,7 @@ public:
                             "Find command reached the dialog and seeded selected source text");
                     const std::shared_ptr<gf::Label> status =
                         std::dynamic_pointer_cast<gf::Label>(find_control(editor, "notepad.status"));
-                    require(status && !(*status).text().starts_with("Cannot show the Find window"),
+                    require(status && !(*status).text.read().starts_with("Cannot show the Find window"),
                             "Find show request accepted by host");
                     find_open_requested = true;
                     // Give queued native presentation an event-loop turn.
@@ -186,7 +186,7 @@ public:
                         "Repeating the native shortcut restores a literal query slot");
 #endif
                 (*query).set_text("native");
-                (*replacement).set_text("replaced");
+                (*replacement).text = "replaced";
                 (*std::dynamic_pointer_cast<gf::Button>(
                      find_control((*find_window).root(), "find.next")))
                     .perform_click();
@@ -195,89 +195,63 @@ public:
                 (*std::dynamic_pointer_cast<gf::Button>(
                      find_control((*find_window).root(), "find.all")))
                     .perform_click();
-                require((*(*editor).text_control()).text() == "replaced saved\r\n",
+                require((*(*editor).text_control()).text.read() == "replaced saved\r\n",
                         "Replace All changes literal text");
                 (*editor).execute("undo");
-                require((*(*editor).text_control()).text() == "native saved\r\n",
+                require((*(*editor).text_control()).text.read() == "native saved\r\n",
                         "Replace All single undo");
-                static_cast<void>(handles[3].request_close());
+                static_cast<void>(handles[1].request_close());
                 break;
             }
             case 1:
                 (*editor).execute("font");
-                require(handles[4].active(), "Owned font window active");
-                static_cast<void>(handles[4].request_close());
-                break;
-            case 2:
-                (*editor).execute("open");
-                require(!(*editor).enabled(), "Picker suppresses owner controls");
-                static_cast<void>(handles[1].request_close());
-                break;
-            case 3:
-                if (close_count[1] < 1) {
-                    --stage;
-                    return;
-                }
-                std::cout << "open picker closed; owner enabled=" << (*editor).enabled()
-                          << std::endl;
-                require((*editor).enabled(), "Picker cancellation restores owner controls");
-                std::cout << "show save as" << std::endl;
-                (*editor).execute("save-as");
-                require(!(*editor).enabled(), "Save As suppresses owner controls");
+                require(handles[2].active(), "Owned font window active");
                 static_cast<void>(handles[2].request_close());
                 break;
+            case 2:
+            case 3:
             case 4:
-                if (close_count[2] < 1) {
-                    --stage;
-                    return;
-                }
-                require((*editor).enabled(), "Save As cancellation restores owner controls");
-                (*editor).execute("open");
-                require(!(*editor).enabled(), "Picker reusable presentation");
-                static_cast<void>(handles[1].request_close());
+                // Open and Save As show the host's modal file dialogs,
+                // which a native test cannot dismiss; the stages stay
+                // numbered so the later stages keep their order.
                 break;
             case 5:
-                if (close_count[1] < 2) {
-                    --stage;
-                    return;
-                }
-                require((*editor).enabled(), "Reopened picker cancellation");
                 (*editor).execute("characters");
-                require(handles[5].active(), "Owned Unicode dialog active");
+                require(handles[3].active(), "Owned Unicode dialog active");
                 (*(*editor).character_picker(false)).select_codepoint(0x1f600);
                 (*(*editor).character_picker(false)).insert_selected();
-                require((*(*editor).text_control()).text().find("\xf0\x9f\x98\x80") !=
+                require((*(*editor).text_control()).text.read().find("\xf0\x9f\x98\x80") !=
                             std::string::npos,
                         "Native Unicode dialog inserts a supplementary scalar");
                 (*editor).execute("undo");
-                require((*(*editor).text_control()).text() == "native saved\r\n",
+                require((*(*editor).text_control()).text.read() == "native saved\r\n",
                         "Unicode insertion undo");
-                static_cast<void>(handles[5].request_close());
+                static_cast<void>(handles[3].request_close());
                 break;
             case 6:
                 (*editor).execute("controls");
-                require(handles[6].active(), "Owned control dialog active");
+                require(handles[4].active(), "Owned control dialog active");
                 (*(*editor).character_picker(true)).select_codepoint(0x200b);
                 (*(*editor).character_picker(true)).insert_selected();
-                require((*(*editor).text_control()).text().find("\xe2\x80\x8b") !=
+                require((*(*editor).text_control()).text.read().find("\xe2\x80\x8b") !=
                             std::string::npos,
                         "Native control dialog inserts literal source bytes");
                 (*editor).execute("undo");
-                require((*(*editor).text_control()).text() == "native saved\r\n",
+                require((*(*editor).text_control()).text.read() == "native saved\r\n",
                         "Control insertion undo");
-                static_cast<void>(handles[6].request_close());
+                static_cast<void>(handles[4].request_close());
                 break;
             case 7:
-                if (close_count[5] < 1 || close_count[6] < 1) {
+                if (close_count[3] < 1 || close_count[4] < 1) {
                     --stage;
                     return;
                 }
-                (*(*editor).text_control()).set_text("mixed\nline\r\n");
+                (*(*editor).text_control()).text = "mixed\nline\r\n";
                 (*editor).execute("save");
-                require((*editor).save_choice_pending() && handles[7].active(),
+                require((*editor).save_choice_pending() && handles[5].active(),
                         "Native mixed-ending choice is active before publication");
                 (*editor).execute("cancel-save");
-                require(!(*editor).save_choice_pending() && (*editor).enabled(),
+                require(!(*editor).save_choice_pending() && (*editor).enabled.read(),
                         "Native mixed-ending cancellation restores owner");
                 (*editor).execute("save");
                 (*editor).execute("save-as-is");
@@ -290,7 +264,7 @@ public:
                 (*editor).execute("save-normalized");
                 require(
                     notepad::read_file(path).bytes == "mixed\r\nline\r\n" &&
-                        (*(*editor).text_control()).text() == "mixed\r\nline\r\n",
+                        (*(*editor).text_control()).text.read() == "mixed\r\nline\r\n",
                     "Native conversion uses the document CRLF default and displays saved bytes");
                 break;
             case 9: {
@@ -298,7 +272,7 @@ public:
                 external << "external native change";
                 external.close();
                 (*editor).execute("save");
-                require((*editor).conflict_pending() && handles[8].active(),
+                require((*editor).conflict_pending() && handles[6].active(),
                         "Native conflict choice owns an active dialog");
                 (*editor).execute("conflict-over");
                 (*editor).execute("conflict-review");
@@ -306,7 +280,7 @@ public:
             }
             case 10:
                 (*editor).execute("conflict-save");
-                require(!(*editor).conflict_pending() && (*editor).enabled() &&
+                require(!(*editor).conflict_pending() && (*editor).enabled.read() &&
                             notepad::read_file(path).bytes == "mixed\r\nline\r\n",
                         "Native reviewed overwrite publishes and restores owner");
                 break;
@@ -354,20 +328,20 @@ public:
                 const std::string title = expected_title(false);
                 capture_native_view(title.c_str(), "editor-source-status");
 #endif
-                (*(*editor).text_control()).set_text("2,3\r\n4,5");
+                (*(*editor).text_control()).text = "2,3\r\n4,5";
                 (*editor).execute("csv-view");
                 const std::shared_ptr<notepad::CsvView> grid = (*editor).csv_control();
-                require((*grid).visible(), "Native CSV editor view opened");
+                require((*grid).visible.read(), "Native CSV editor view opened");
                 (*grid).select_cell({0, 1});
                 const std::shared_ptr<gf::TextBox> entry =
                     std::dynamic_pointer_cast<gf::TextBox>(find_control(grid, "csv.entry"));
                 require(static_cast<bool>(entry), "Native CSV formula entry exists");
-                (*entry).set_text("=A1*4");
+                (*entry).text = "=A1*4";
                 (*main).request_focus(entry);
                 csv_submitted_at = std::chrono::steady_clock::now();
                 const bool submitted = (*main).dispatch_key(
                     {gf::KeyAction::down, gf::PhysicalKey::enter});
-                require(submitted && (*(*editor).text_control()).text() == "2,=A1*4\r\n4,5",
+                require(submitted && (*(*editor).text_control()).text.read() == "2,=A1*4\r\n4,5",
                         "Enter through the native window retains formula source");
                 break;
             }
@@ -397,10 +371,10 @@ public:
                             menu_converted = (*item.command).execute("native.csv-menu");
                     }
                 }
-                require(menu_converted && (*(*editor).text_control()).text() == "2,8\r\n4,5",
+                require(menu_converted && (*(*editor).text_control()).text.read() == "2,8\r\n4,5",
                         "Native editor CSV menu converts formula to exact result");
                 (*editor).execute("undo");
-                require((*(*editor).text_control()).text() == "2,=A1*4\r\n4,5",
+                require((*(*editor).text_control()).text.read() == "2,=A1*4\r\n4,5",
                         "Native conversion undo restores formula");
                 const gf::Rect bounds = (*grid).absolute_bounds();
                 gf::PointerEvent context_press{};
@@ -427,10 +401,10 @@ public:
                     --stage;
                     return;
                 }
-                require((*(*editor).text_control()).text() == "2,8\r\n4,5",
+                require((*(*editor).text_control()).text.read() == "2,8\r\n4,5",
                         "Native cell context command converts formula asynchronously");
                 (*editor).execute("undo");
-                require((*(*editor).text_control()).text() == "2,=A1*4\r\n4,5",
+                require((*(*editor).text_control()).text.read() == "2,=A1*4\r\n4,5",
                         "Native context conversion undo restores formula");
                 (*editor).execute("save");
                 require(notepad::read_file(path).bytes == "2,=A1*4\r\n4,5",
@@ -441,15 +415,15 @@ public:
                 (*(*editor).text_control()).replace_selection("new draft");
                 verify_title(true, true);
                 (*editor).execute("undo");
-                require((*(*editor).text_control()).text().empty(), "New draft undo restores blank document");
+                require((*(*editor).text_control()).text.read().empty(), "New draft undo restores blank document");
                 verify_title(false, true);
                 std::string long_text{};
                 for (int row = 0; row < 100; ++row) {
                     long_text.append(180, 'x');
                     long_text.append("\n");
                 }
-                (*(*editor).text_control()).set_word_wrap(false);
-                (*(*editor).text_control()).set_text(long_text);
+                (*(*editor).text_control()).word_wrap = false;
+                (*(*editor).text_control()).text = long_text;
                 (*(*editor).text_control()).select(gf::Utf8Offset(0), gf::Utf8Offset(4));
                 break;
             }
@@ -477,7 +451,7 @@ public:
                 gf::TextBox &text = *(*editor).text_control();
                 require(text.vscroll() && !text.hscroll() && text.scroll_offset().x == 0,
                         "Native wrapped document only scrolls vertically");
-                text.set_text("");
+                text.text = "";
                 break;
             }
             case 20: {
@@ -500,9 +474,9 @@ public:
     void run() {
         editor = gf::make_control<notepad::Editor>(gf::StableId("native.editor"));
         std::vector<gf::ApplicationWindow> windows = (*editor).application_windows(path);
-        require(windows.size() == handles.size(), "Expected main and eight owned dialogs");
+        require(windows.size() == handles.size(), "Expected main and six owned dialogs");
         main = windows.front().model.get();
-        find_window = windows[3].model.get();
+        find_window = windows[1].model.get();
         for (std::size_t i = 0; i < windows.size(); ++i) {
             hooks[i].ready = std::move(windows[i].options.ready);
             hooks[i].closing = std::move(windows[i].options.closing);
@@ -510,7 +484,10 @@ public:
             windows[i].options.closing = ClosingListener{this, i};
             windows[i].options.initially_visible = i == 0;
         }
-        const gf::ApplicationResult result = gf::Application::run(std::move(windows));
+        gf::ApplicationCreateResult created = gf::Application::create(gf::ApplicationConfig{});
+        if (!created)
+            throw std::runtime_error("Cannot create the application.");
+        const gf::ApplicationResult result = (*created.application).run(std::move(windows));
         tick = {};
         timer.reset();
         if (result.callback_exception)

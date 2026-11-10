@@ -5,7 +5,8 @@
 #include "markdown_view.hpp"
 #include "query_field.hpp"
 #include "character_picker.hpp"
-#include <file_manager/document_picker_view.hpp>
+#include "code_editor/style_painter.hpp"
+#include "highlight/code_document.hpp"
 #include <functional>
 #include <gui_forms/application.hpp>
 #include <gui_forms/gui_forms.hpp>
@@ -35,19 +36,45 @@ private:
 };
 class Editor final : public gf::Control {
 public:
+    // The file dialogs' filter, in Windows Forms' "label|patterns" form.
+    static constexpr std::string_view file_dialog_filter =
+        "All files|*.*|Text documents|*.txt;*.log;*.ini;*.cfg;*.md|Theme sheets and forms|*.css;*.form";
     explicit Editor(gf::StableId id, std::function<void()> new_window = {});
     ~Editor() override;
     static constexpr bool initialize_tree_after_construction = true;
     void initialize_control_tree();
     void arrange(gf::Rect bounds) override;
     void on_paint(gf::Painter &, gf::Rect) override;
-    void on_frame(gf::FrameTime) override;
+    // Advances pending search or replacement work by one slice. SearchTick
+    // calls it on the UI timer; tests call it to step the work.
+    void on_frame(gf::FrameTime);
     bool search_pending() const { return static_cast<bool>(search_); }
+    // The main window (a plain window over this editor) and the dialogs it
+    // owns, for Application::run.
     std::vector<gf::ApplicationWindow> application_windows(const std::filesystem::path &initial);
+    // As above with `main` as the main window: a window whose root is this
+    // editor (the generated swiftedit::MainWindow). Refused with
+    // std::invalid_argument when `main` is null or shows another root.
+    std::vector<gf::ApplicationWindow> application_windows(std::unique_ptr<gf::Window> main,
+                                                           const std::filesystem::path &initial);
     void execute(const std::string &command);
     // Same entrypoints are used by the shell and deterministic consumer tests.
     void open_file(const std::filesystem::path &source);
+    // The screenshot run (src/screenshots.cpp; main's --screenshots <dir>):
+    // set before the run starts; once the main window is ready the editor
+    // opens sample documents written into `directory`, writes
+    // swiftedit_<state>.png there after each has painted, and closes.
+    void set_screenshot_directory(std::filesystem::path directory);
+    [[nodiscard]] const std::vector<std::string> &screenshot_failures() const {
+        return screenshot_failures_;
+    }
     std::shared_ptr<gf::TextBox> text_control() const { return text_; }
+    // The syntax model mirroring the document text: its language follows the
+    // opened file's extension until the Language menu chooses another.
+    const swiftedit::highlight::CodeDocument &code_document() const { return code_; }
+    // Sets the program a "New Window" command starts; a window made from the
+    // form gets it after construction. It must not retain the editor.
+    void set_new_window(std::function<void()> new_window) { new_window_ = std::move(new_window); }
     const Document &document() const { return document_; }
     std::shared_ptr<CsvView> csv_control() const { return csv_; }
     std::shared_ptr<QueryField> query_control() const { return query_; }
@@ -67,8 +94,6 @@ private:
     enum class Continuation { none, new_document, open_document, close_window };
     enum class WindowKind {
         main,
-        open_picker,
-        save_picker,
         find,
         font,
         characters,
@@ -126,6 +151,14 @@ private:
         std::weak_ptr<Editor> owner{};
         void operator()() const;
     };
+    struct SearchTick {
+        std::weak_ptr<Editor> owner{};
+        void operator()(gf::FrameTime) const;
+    };
+    struct ScreenshotTick {
+        std::weak_ptr<Editor> owner{};
+        void operator()(gf::FrameTime) const;
+    };
     struct ImportSummaryTick {
         std::weak_ptr<Editor> owner{};
         void operator()(gf::FrameTime) const;
@@ -140,11 +173,6 @@ private:
         std::weak_ptr<Editor> owner{};
         WindowKind kind{WindowKind::main};
         void operator()(gf::HostCloseRequest &) const;
-    };
-    struct PickerListener {
-        std::weak_ptr<Editor> owner{};
-        bool save_as{};
-        void operator()(const file_manager::DocumentPickerResult &) const;
     };
     struct CharacterInsert {
         std::weak_ptr<Editor> owner{};
@@ -172,11 +200,6 @@ private:
                                                   ButtonAction);
     void add_dialog(std::vector<gf::ApplicationWindow> &, Dialog &, WindowKind, const char *,
                     const char *, gf::Size);
-    struct Picker {
-        std::unique_ptr<file_manager::DocumentPickerView> view{};
-        gf::Window *window{};
-        gf::ApplicationWindowHandle handle{};
-    };
     struct Dialog {
         std::shared_ptr<DialogLayout> root{};
         gf::Window *window{};
@@ -184,6 +207,10 @@ private:
     };
     gf::MenuItemSpec item(std::string id, std::string label, std::string shortcut = {});
     void ready(gf::Window &, gf::ApplicationWindowHandle, const std::filesystem::path &);
+    void start_screenshots();
+    // One step of the screenshot run; false when it is over.
+    bool screenshot_step();
+    void capture_screenshot(const char *state);
     void closing(gf::HostCloseRequest &);
     void refresh();
     void refresh_title(std::string_view content);
@@ -212,12 +239,13 @@ private:
     void conflict_action(ButtonAction);
     void cancel_conflict();
     swiftedit::DocumentStamp save_stamp() const;
-    void show_picker(bool save_as);
-    void picker_result(bool save_as, const file_manager::DocumentPickerResult &);
-    void hide_picker(bool save_as);
+    // Shows the Open or Save As dialog modally and acts on the choice.
+    void choose_file(bool save_as);
+    void file_chosen(bool save_as, const std::filesystem::path &path);
     void show_find();
     void find_next();
     void advance_search();
+    void schedule_search();
     void advance_replacement();
     void cancel_search();
     void replace_one();
@@ -239,7 +267,9 @@ private:
     std::vector<gf::SubscriptionToken> subscriptions_{};
     std::vector<gf::AcceleratorToken> accelerators_{};
     gf::ApplicationWindowHandle handle_{};
-    Picker open_picker_{}, save_picker_{};
+    // Made on first use and reused, so later choices keep their state.
+    std::unique_ptr<gf::OpenFileDialog> open_dialog_{};
+    std::unique_ptr<gf::SaveFileDialog> save_dialog_{};
     Dialog find_{}, font_{};
     Dialog conflict_{};
     std::unique_ptr<swiftedit::SaveReview> conflict_review_{};
@@ -271,13 +301,18 @@ private:
     std::shared_ptr<gf::Button> find_next_button_{}, find_close_{}, font_apply_{}, font_close_{};
     std::shared_ptr<gf::ComboBox> font_role_{}, font_size_{};
     std::shared_ptr<gf::CheckBox> font_bold_{}, font_italic_{};
-    bool show_status_{true}, picker_active_{}, active_save_picker_{}, close_authorized_{};
+    bool show_status_{true}, file_dialog_active_{}, close_authorized_{};
     std::uint64_t dialog_sequence_{1};
     Continuation after_save_{Continuation::none};
     // UI-thread-owned Unicode metadata, reused across selection-only refreshes.
     gf::TextStore counted_text_{};
     std::size_t character_count_{};
     std::string status_format_{};
+    // The highlighter's model of the document text, brought in step by refresh.
+    swiftedit::highlight::CodeDocument code_{swiftedit::highlight::language_named("plain")};
+    // Draws code_'s syntax colours in the text box (refresh, choose_language).
+    swiftedit::StylePainter styles_{};
+    void choose_language(const swiftedit::highlight::Language &language);
     bool selection_metadata_current_{};
     struct FindWork {
         std::unique_ptr<swiftedit::PatternScan> scan{};
@@ -291,6 +326,12 @@ private:
     };
     std::unique_ptr<FindWork> search_{};
     gf::FrameRequestToken search_frame_{};
+    // The screenshot run: where it writes, its next step, what failed and
+    // its timer. Empty directory: no run.
+    std::filesystem::path screenshot_directory_{};
+    std::size_t screenshot_next_{};
+    std::vector<std::string> screenshot_failures_{};
+    gf::FrameRequestToken screenshot_frame_{};
 };
 std::string path_utf8(const std::filesystem::path &);
 } // namespace notepad
