@@ -5,19 +5,37 @@
 
 namespace notepad {
 QueryField::QueryField(gf::StableId id) : Control(std::move(id)) {
-    focusable = true;
+    // A composite with an edit part keeps focusable false: traversal and
+    // request_focus reach the edit part.
+    focusable = false;
     accessible_name = "Find what; right-click or Control-question to toggle a wildcard";
 }
 void QueryField::initialize_control_tree() {
     edit_ = gf::make_control<gf::TextBox>(gf::StableId("query.editing"));
     (*edit_).maximum_length = 4096;
-    (*edit_).visible = false;
+    // Visible, so it can hold focus, but arranged to an empty box: this
+    // control paints the query and takes the pointer.
+    (*edit_).set_requested_bounds({0, 0, 0, 0});
     add_child(edit_);
+    (*edit_).set_edit_filter(gf::Delegate<gf::TextEdit &>::bind<QueryField, &QueryField::filter_edit>(*this));
+    editor_text_ = (*edit_).text_changed().subscribe(
+        *this, gf::Delegate<const std::string &>::bind<QueryField, &QueryField::editor_text_changed>(*this));
+    editor_selection_ = (*edit_).selection_changed().subscribe(
+        *this,
+        gf::Delegate<const gf::TextSelection &>::bind<QueryField, &QueryField::editor_selection_changed>(*this));
+    editor_focus_ = (*edit_).focus_observed().subscribe(
+        *this, gf::Delegate<bool>::bind<QueryField, &QueryField::editor_focus_changed>(*this));
 }
 void QueryField::on_dispose() noexcept {
-    (*edit_).on_focus_changed(false);
+    editor_text_.disconnect();
+    editor_selection_.disconnect();
+    editor_focus_.disconnect();
+    if (edit_)
+        (*edit_).set_edit_filter(gf::Delegate<gf::TextEdit &>{});
+    pending_.reset();
     Control::on_dispose();
 }
+gf::Control::Ptr QueryField::focus_target() const { return edit_; }
 QueryField::Snapshot QueryField::snapshot() const {
     Snapshot result{};
     result.text = store_.utf8();
@@ -41,7 +59,15 @@ void QueryField::restore(const Snapshot &value) {
     }
     for (std::size_t index = 0; index < slots.size() && index < value.flags.size(); ++index)
         slots[index].wildcard = value.flags[index];
-    (*edit_).text = value.text;
+    restoring_ = true;
+    try {
+        (*edit_).text = value.text;
+    } catch (...) {
+        restoring_ = false;
+        throw;
+    }
+    restoring_ = false;
+    pending_.reset();
     (*edit_).select(value.selection.anchor, value.selection.caret);
     (*edit_).clear_undo_history();
     store_ = std::move(next);
@@ -80,32 +106,11 @@ void QueryField::set_text(std::string value) {
     redo_.clear();
 }
 std::string_view QueryField::text() const { return store_.utf8(); }
-void QueryField::synchronize(const Snapshot &before, bool backward, bool deletion, bool replacement) {
-    const std::string value((*edit_).text.read());
-    (*edit_).clear_undo_history();
-    if (value == before.text && !replacement)
-        return;
+void QueryField::synchronize(const Snapshot &before, std::string_view value, std::size_t start,
+                             std::size_t removed, std::size_t inserted) {
     if (value.size() > 4096) {
         restore(before);
         return;
-    }
-    std::size_t start = before.selection.start().value();
-    std::size_t removed = before.selection.length();
-    if (deletion && !removed) {
-        removed = before.text.size() - value.size();
-        if (backward)
-            start -= removed;
-    }
-    const std::size_t retained = before.text.size() - removed;
-    if (value.size() < retained) {
-        restore(before);
-        throw std::runtime_error("Query edit did not match its source selection.");
-    }
-    const std::size_t inserted = value.size() - retained;
-    if (value.substr(0, start) != before.text.substr(0, start) ||
-        value.substr(start + inserted) != before.text.substr(start + removed)) {
-        restore(before);
-        throw std::runtime_error("Query edit changed text outside its source selection.");
     }
     gf::TextStore next(value);
     std::vector<swiftedit::SearchSlot> slots{};
@@ -234,21 +239,8 @@ void QueryField::on_paint(gf::Painter &painter, gf::Rect) {
     }
     painter.restore();
 }
-void QueryField::on_focus_changed(bool focused) {
-    focused_ = focused;
-    (*edit_).on_focus_changed(focused);
-    invalidate(gf::Dirty::paint);
-}
-void QueryField::on_key_down(gf::KeyEventArgs &arguments) {
-    gf::Control::on_key_down(arguments);
-    if (arguments.handled)
-        return;
-    gf::KeyEvent event = gf::key_event_of(arguments, gf::KeyAction::down);
-    handle_key(event);
-    arguments.handled = event.handled;
-}
-void QueryField::handle_key(gf::KeyEvent &event) {
-    if (event.phase != gf::EventPhase::target || event.action != gf::KeyAction::down)
+void QueryField::on_key_preview(gf::KeyEvent &event) {
+    if (event.action != gf::KeyAction::down)
         return;
     // USB HID slash/question key, as normalized by the public host contract.
     if (event.physical_key == 0x38 && gf::has_modifier(event.modifiers, gf::Modifier::control) &&
@@ -265,83 +257,68 @@ void QueryField::handle_key(gf::KeyEvent &event) {
                           gf::has_modifier(event.modifiers, gf::Modifier::shift);
         static_cast<void>(history(redo));
         event.handled = true;
+    }
+}
+// Called by the edit part before it applies a user edit (typing, deletion,
+// cut or paste). The edit is recorded with the state before it; the text
+// change that follows moves the flags. A replacement by the same bytes
+// changes no text and raises no text_changed, so it is applied here: it
+// still turns the flags it covers literal.
+void QueryField::filter_edit(gf::TextEdit &edit) {
+    PendingEdit next{};
+    next.before = snapshot();
+    next.start = edit.start.value();
+    next.removed = edit.end.value() - edit.start.value();
+    next.inserted = edit.replacement.size();
+    const std::string_view current(next.before.text);
+    const bool same_bytes = next.removed > 0 && next.removed == next.inserted &&
+                            current.substr(next.start, next.removed) == edit.replacement;
+    if (same_bytes) {
+        pending_.reset();
+        synchronize(next.before, current, next.start, next.removed, next.inserted);
         return;
     }
-    const Snapshot before = snapshot();
-    try {
-        edit_key(event);
-        const bool backward = event.physical_key == gf::PhysicalKey::backspace;
-        const bool deletion = backward || event.physical_key == gf::PhysicalKey::delete_forward;
-        const bool replacement = command && event.physical_key == gf::PhysicalKey::v &&
-                                 event.handled && !before.selection.empty();
-        synchronize(before, backward, deletion, replacement);
-    } catch (...) {
-        restore(before);
-        throw;
-    }
-    invalidate(gf::Dirty::paint);
+    pending_ = std::move(next);
 }
-// GUI.Forms 0.6 removed Control::on_key, and TextBox's key raiser is
-// protected, so the key can no longer be handed to the private child; this
-// applies the editing keys a one-line query needs through the child's public
-// calls, by grapheme (store_ mirrors the child's text). Word movement and
-// the platform's other text keys wait for a public entry for an embedded
-// editor (CONFORMANCE_PREP.md).
-void QueryField::edit_key(gf::KeyEvent &event) {
-    const bool shift = gf::has_modifier(event.modifiers, gf::Modifier::shift);
-    const bool command = gf::has_modifier(event.modifiers, gf::Modifier::control) ||
-                         gf::has_modifier(event.modifiers, gf::Modifier::meta);
-    const std::uint32_t key = event.physical_key;
-    const gf::TextSelection selection = (*edit_).selection();
-    const gf::Utf8Offset end = store_.utf8_size();
-    if (command && !shift && key == gf::PhysicalKey::a) {
-        (*edit_).select_all();
-    } else if (command && !shift && key == gf::PhysicalKey::c) {
-        static_cast<void>((*edit_).copy());
-    } else if (command && !shift && key == gf::PhysicalKey::x) {
-        static_cast<void>((*edit_).cut());
-    } else if (command && !shift && key == gf::PhysicalKey::v) {
-        static_cast<void>((*edit_).paste());
-    } else if (!command && (key == gf::PhysicalKey::left || key == gf::PhysicalKey::right)) {
-        const bool forward = key == gf::PhysicalKey::right;
-        gf::Utf8Offset caret = selection.caret;
-        if (!shift && !selection.empty()) {
-            caret = forward ? selection.end() : selection.start();
-        } else if (forward && caret.value() < end.value()) {
-            caret = store_.next_grapheme_boundary(caret);
-        } else if (!forward && caret.value() > 0) {
-            caret = store_.previous_grapheme_boundary(caret);
-        }
-        (*edit_).select(shift ? selection.anchor : caret, caret);
-    } else if (key == gf::PhysicalKey::home || key == gf::PhysicalKey::end) {
-        const gf::Utf8Offset caret = key == gf::PhysicalKey::home ? gf::Utf8Offset(0) : end;
-        (*edit_).select(shift ? selection.anchor : caret, caret);
-    } else if (!command && (key == gf::PhysicalKey::backspace || key == gf::PhysicalKey::delete_forward)) {
-        if (selection.empty()) {
-            const bool backward = key == gf::PhysicalKey::backspace;
-            if (backward && selection.caret.value() == 0)
-                return;
-            if (!backward && selection.caret.value() >= end.value())
-                return;
-            const gf::Utf8Offset other = backward ? store_.previous_grapheme_boundary(selection.caret)
-                                                  : store_.next_grapheme_boundary(selection.caret);
-            (*edit_).select(other, selection.caret);
-        }
-        static_cast<void>((*edit_).delete_selection());
-    } else {
+void QueryField::editor_text_changed(const std::string &value) {
+    if (restoring_)
         return;
+    const std::optional<PendingEdit> edit = std::move(pending_);
+    pending_.reset();
+    (*edit_).clear_undo_history();
+    if (edit) {
+        const PendingEdit &recorded = *edit;
+        const std::string_view before(recorded.before.text);
+        const bool sized = recorded.start + recorded.removed <= before.size() &&
+                           value.size() + recorded.removed == before.size() + recorded.inserted;
+        const bool matches = sized && value.compare(0, recorded.start, before, 0, recorded.start) == 0 &&
+                             value.compare(recorded.start + recorded.inserted, std::string::npos, before,
+                                           recorded.start + recorded.removed, std::string::npos) == 0;
+        if (matches) {
+            synchronize(recorded.before, value, recorded.start, recorded.removed, recorded.inserted);
+            return;
+        }
     }
-    event.handled = true;
-}
-void QueryField::on_text_input(gf::TextInputEvent &event) {
+    // A change the filter did not see (or one it saw differently): the
+    // smallest edit between the two texts, starting at a grapheme boundary.
     const Snapshot before = snapshot();
-    try {
-        (*edit_).on_text_input(event);
-        synchronize(before, false, false, event.handled && !before.selection.empty());
-    } catch (...) {
-        restore(before);
-        throw;
-    }
+    const std::string_view old_text(before.text);
+    if (value == old_text)
+        return;
+    std::size_t prefix = 0;
+    while (prefix < old_text.size() && prefix < value.size() && old_text[prefix] == value[prefix])
+        ++prefix;
+    while (prefix > 0 && !store_.is_grapheme_boundary(gf::Utf8Offset(prefix)))
+        --prefix;
+    std::size_t suffix = 0;
+    while (suffix < old_text.size() - prefix && suffix < value.size() - prefix &&
+           old_text[old_text.size() - 1 - suffix] == value[value.size() - 1 - suffix])
+        ++suffix;
+    synchronize(before, value, prefix, old_text.size() - prefix - suffix, value.size() - prefix - suffix);
+}
+void QueryField::editor_selection_changed(const gf::TextSelection &) { invalidate(gf::Dirty::paint); }
+void QueryField::editor_focus_changed(bool focused) {
+    focused_ = focused;
     invalidate(gf::Dirty::paint);
 }
 void QueryField::on_mouse_down(gf::MouseEventArgs &arguments) {

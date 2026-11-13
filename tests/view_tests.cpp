@@ -742,13 +742,14 @@ int main() {
         (*query).on_paint(query_painter, {0, 0, 300, 32});
         check(query_painter.drawn == "a?c", "Question mark is initially rendered literally");
         (*query).select(gf::Utf8Offset(1), gf::Utf8Offset(1));
-        (*query).on_focus_changed(true);
+        // Focus goes to the edit part; the key preview reaches the field first.
+        check(query_window.request_focus(query), "Query focus goes to its edit part");
         gf::KeyEvent toggle{};
         toggle.physical_key = 0x38;
         toggle.modifiers = gf::Modifier::control | gf::Modifier::shift;
-        (*query).handle_key(toggle);
+        const bool toggled = query_window.dispatch_key(toggle);
         const swiftedit::SearchPattern flagged = (*query).pattern();
-        check(toggle.handled && flagged.slots()[1].wildcard && (*query).text() == "a?c",
+        check(toggled && flagged.slots()[1].wildcard && (*query).text() == "a?c",
               "Ctrl-question toggles metadata without rewriting the literal query");
         query_painter.drawn.clear();
         (*query).on_paint(query_painter, {0, 0, 300, 32});
@@ -766,8 +767,8 @@ int main() {
         (*query).toggle_slot(1);
         (*query).select(gf::Utf8Offset(3), gf::Utf8Offset(3));
         gf::TextInputEvent appended{"d"};
-        (*query).on_text_input(appended);
-        check(appended.handled && (*query).text() == "a?cd", "Query append routes through text input");
+        const bool appended_handled = query_window.dispatch_text(appended);
+        check(appended_handled && (*query).text() == "a?cd", "Query append routes through text input");
         const swiftedit::SearchPattern extended = (*query).pattern();
         check(extended.slots()[1].wildcard && !extended.slots()[3].wildcard,
               "Typing outside a flagged position retains its flag");
@@ -778,10 +779,10 @@ int main() {
         (*query).select(gf::Utf8Offset(3), gf::Utf8Offset(3));
         gf::TextInputEvent inserted{};
         inserted.text_utf8 = "?";
-        (*query).on_text_input(inserted);
-        check(inserted.handled && (*query).text() == "a\xc3\xa9?c",
+        const bool inserted_handled = query_window.dispatch_text(inserted);
+        check(inserted_handled && (*query).text() == "a\xc3\xa9?c",
               "Query field routes standard Unicode text input");
-        (*query).on_focus_changed(false);
+        static_cast<void>(query_window.request_focus(nullptr));
         (*query).set_text(std::string(256, 'a'));
         for (std::size_t slot = 0; slot < 256; ++slot)
             (*query).toggle_slot(slot);

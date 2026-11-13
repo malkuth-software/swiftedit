@@ -774,6 +774,96 @@ void verify_query_occurrence_history() {
           "Refused oversized insertion does not add undo history");
     host.shutdown();
 }
+// One key down through the window, as the host delivers it.
+bool press_query_key(gf::Window &window, std::uint32_t physical_key, gf::Modifier modifiers) {
+    gf::KeyEvent key{};
+    key.physical_key = physical_key;
+    key.modifiers = modifiers;
+    const bool handled = window.dispatch_key(key);
+    return handled;
+}
+// QueryField is a composite whose edit part (its TextBox) takes the focus, so
+// the editing keys reach the TextBox itself. Each key is checked by its effect
+// on the text, through the window as the host delivers it.
+void verify_query_editing_keys() {
+    const std::shared_ptr<notepad::QueryField> query =
+        gf::make_control<notepad::QueryField>(gf::StableId("query.keys"));
+    gf::Window window(query, {400, 80});
+    TestServices services{};
+    gf::HostSession host(window, capabilities(), &services);
+    check(host.dispatch({1, 0, gf::HostAttachEvent{{400, 80}, 1}}).accepted(), "Query key host attached");
+    window.perform_layout();
+    check(window.request_focus(query), "Query key fixture accepts focus");
+    check(window.focused_control() != query && window.active_control() == query,
+          "The query's edit part holds focus and the query is the active control");
+    const gf::Modifier none = gf::Modifier::none;
+
+    (*query).set_text("abcd");
+    (*query).select(gf::Utf8Offset(4), gf::Utf8Offset(4));
+    check(press_query_key(window, gf::PhysicalKey::left, none) && window.dispatch_text({"X"}) &&
+              (*query).text() == "abcXd",
+          "Left moves the query caret one grapheme back");
+    (*query).set_text("abcd");
+    (*query).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
+    check(press_query_key(window, gf::PhysicalKey::right, none) && window.dispatch_text({"Y"}) &&
+              (*query).text() == "aYbcd",
+          "Right moves the query caret one grapheme on");
+    (*query).set_text("abcd");
+    (*query).select(gf::Utf8Offset(2), gf::Utf8Offset(2));
+    check(press_query_key(window, gf::PhysicalKey::home, none) && window.dispatch_text({"H"}) &&
+              (*query).text() == "Habcd",
+          "Home moves the query caret to the start");
+    check(press_query_key(window, gf::PhysicalKey::end, none) && window.dispatch_text({"E"}) &&
+              (*query).text() == "HabcdE",
+          "End moves the query caret to the end");
+
+    (*query).set_text("one two three");
+    (*query).select(gf::Utf8Offset(13), gf::Utf8Offset(13));
+    check(press_query_key(window, gf::PhysicalKey::left, gf::Modifier::alt) && window.dispatch_text({"X"}) &&
+              (*query).text() == "one two Xthree",
+          "Alt+Left moves the query caret to the previous word start");
+    (*query).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
+    check(press_query_key(window, gf::PhysicalKey::right, gf::Modifier::control) &&
+              window.dispatch_text({"Y"}) && (*query).text() == "one Ytwo Xthree",
+          "Control+Right moves the query caret to the next word start");
+
+    (*query).set_text("abcd");
+    (*query).select(gf::Utf8Offset(4), gf::Utf8Offset(4));
+    check(press_query_key(window, gf::PhysicalKey::left, gf::Modifier::shift) &&
+              press_query_key(window, gf::PhysicalKey::left, gf::Modifier::shift) &&
+              press_query_key(window, gf::PhysicalKey::backspace, none) && (*query).text() == "ab",
+          "Shift+Left extends the query selection and Backspace removes it");
+    (*query).set_text("abcd");
+    (*query).select(gf::Utf8Offset(2), gf::Utf8Offset(2));
+    check(press_query_key(window, gf::PhysicalKey::backspace, none) && (*query).text() == "acd",
+          "Backspace removes the grapheme before the query caret");
+    (*query).select(gf::Utf8Offset(0), gf::Utf8Offset(0));
+    check(press_query_key(window, gf::PhysicalKey::delete_forward, none) && (*query).text() == "cd",
+          "Delete removes the grapheme after the query caret");
+    (*query).set_text("a\xcc\x81" "b");
+    (*query).select(gf::Utf8Offset(3), gf::Utf8Offset(3));
+    check(press_query_key(window, gf::PhysicalKey::backspace, none) && (*query).text() == "b",
+          "Backspace removes a whole combining grapheme");
+
+    (*query).set_text("abc");
+    (*query).select(gf::Utf8Offset(1), gf::Utf8Offset(1));
+    check(press_query_key(window, gf::PhysicalKey::a, gf::Modifier::control) && window.dispatch_text({"Z"}) &&
+              (*query).text() == "Z",
+          "Control+A selects the whole query");
+    (*query).set_text("abc");
+    check(press_query_key(window, gf::PhysicalKey::a, gf::Modifier::control) &&
+              press_query_key(window, gf::PhysicalKey::c, gf::Modifier::control) &&
+              services.clipboard == "abc" && (*query).text() == "abc",
+          "Control+C copies the query selection");
+    check(press_query_key(window, gf::PhysicalKey::x, gf::Modifier::control) && services.clipboard == "abc" &&
+              (*query).text().empty(),
+          "Control+X cuts the query selection");
+    check(press_query_key(window, gf::PhysicalKey::v, gf::Modifier::control) && (*query).text() == "abc",
+          "Control+V pastes into the query");
+    check(press_query_key(window, gf::PhysicalKey::z, gf::Modifier::control) && (*query).text().empty(),
+          "Control+Z reaches the query's own history, not the edit part's");
+    host.shutdown();
+}
 int main() {
     try {
         verify_theme_package();
@@ -781,6 +871,7 @@ int main() {
         verify_language_menu();
         verify_document_scrollbars();
         verify_query_occurrence_history();
+        verify_query_editing_keys();
         verify_callback_revocation();
         verify_file_shortcuts();
         verify_startup_rtf_summary();
