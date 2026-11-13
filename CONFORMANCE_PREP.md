@@ -73,6 +73,85 @@ and `cancelled` cover Enter and Escape. Three things are missing:
    composite to keep its edit part out of the semantic tree while it publishes the text and selection itself.
    - Wanted: that public way, or the rule SearchField relies on, stated for consumer composites.
 
+## Next: QueryField on the content editing mode (after cp32 folds)
+
+Coordinator's direction: 336a43d stays as the interim. Once `claude/cp32-content-boundary` has folded, QueryField moves
+onto `gui_forms::ContentTextEditor`. QueryField keeps the layout, the glyph and caret positions, and the painting.
+GUI.Forms takes the keys, an input method placed at QueryField's own caret, the undo hooks, and accessibility,
+published once as QueryField's text. I read the API on that branch at 0ac39c76c; nothing here is written yet.
+
+### Shape
+
+- **The control.**
+  - The TextBox becomes a `ContentTextEditor` child, `query.editing`. It is still the focus target, and QueryField
+    stays unfocusable.
+  - It is arranged over QueryField's text area, not an empty box: its region is where the layout's boxes and the
+    caret live, and ContentTextEditor places presses by that layout.
+  - `set_multiline(false)`. `set_draws_selection(false)`: QueryField keeps painting the selection and caret it paints
+    today, from `selection_rectangles()` and `caret_rectangle()`, or from its own edges.
+- **The layout.** On `layout_requested(revision)`, and again whenever `scroll_` changes for the same revision,
+  QueryField builds a `ContentTextLayout`:
+  - one line: range `[0, size)`, bounds the text area;
+  - one cluster per grapheme (one per slot), with bounds `{6 + edges_[i] - scroll_, 3, edges_[i+1] - edges_[i],
+    height - 6}`, left to right;
+  - caret stops at every grapheme boundary, at `6 + edges_[i] - scroll_`. A wildcard draws as a dot, whose width
+    differs from the literal's, so the stops are given rather than derived.
+  - A refused result is logged by `content_layout_result_name`. The editor's fallback keeps editing working.
+- **Keys:** the editor's engine handles the editing keys, word moves, clipboard and IME composition.
+- **IME placement:** `ContentTextEditor::text_input_caret()` returns `caret_rectangle()` from the layout, so
+  composition and candidate windows open at QueryField's caret. This closes gap 2.
+- **Accessibility:**
+  - The editor publishes the one `text_box` node: the text, selection, caret, and the text layout from QueryField's
+    clusters.
+  - QueryField's `accessible_name` moves to the editor, and QueryField publishes nothing of its own.
+  - This closes gap 3. Gap 1 goes too: the editor is a real region, not an empty box.
+  - The flags are not in that node: it publishes the literal text. That is the same as today. A description naming
+    the flagged positions could follow.
+
+### Do the editor's hooks cover the flags and QueryField's undo?
+
+- **Preview keys: yes.** The editor is the focused child and QueryField an ancestor, so `on_key_preview` still reaches
+  QueryField first. Control+Shift+/ and Control/Command Z and Y stay as in 336a43d.
+- **QueryField's own undo: yes, with the same interception.**
+  - The editor has its own undo and redo: `undo`/`can_undo` from TextBoxBase, `redo`/`can_redo` on the editor.
+  - QueryField takes Z and Y in the preview and calls `clear_undo_history()` after each edit, as it does for the
+    TextBox today. So only QueryField's history, which restores text and flags together, is ever used.
+  - Restoring a snapshot uses `set_text` (no undo history; the caret goes to the end), then `select`.
+- **Edit filter: no.** This is the gap for the flags.
+  - ContentTextEditor has no `set_edit_filter`; that is `TextBox`'s, not TextBoxBase's.
+  - Its engine host ignores `editing_user_edit(kind, composing)`.
+  - QueryField learns of an edit only from `text_changed` (the new text) and `selection_changed`. It cannot get the
+    range before the edit applies. A replacement by the same bytes may raise no `text_changed` at all; the cp32
+    source does not say whether the engine reports a no-op replace.
+  - Without a filter, QueryField would reconstruct each edit from the last selection it saw plus a diff. That loses
+    exactness for repeated graphemes: inserting "a" before a flagged "a" in "aa" must move the flag, and a pure diff
+    cannot tell where the "a" went. It also loses the rule that an identical paste over a flag makes it literal (a
+    `verify_query_occurrence_history` case).
+  - Wanted from GUI.Forms: ContentTextEditor offers the same `set_edit_filter(Delegate<TextEdit&>)` as TextBox. Its
+    engine already produces `TextEdit` proposals for TextBox, so the shape is there.
+
+### Other questions for the cp32 review
+
+1. **No frames.** Without `open_frames`, the editor registers a 1×1 placeholder `LiveSurface` with the window. Is
+   that guaranteed to show nothing over QueryField's own painting? Children paint after their parent, and QueryField
+   paints the glyphs underneath. The other way is for QueryField to publish its rendering through `open_frames`,
+   which means painting into pixels instead of through `Painter`.
+2. **Text metrics outside paint.** QueryField measures its labels in `on_paint` today (`measure_text_utf8` on the
+   Painter). `layout_requested` arrives outside paint. QueryField needs either a public text-metrics entry outside
+   paint (a `TextMetricsProvider` from the window), or to submit the layout after its next paint. Which is
+   sanctioned?
+3. **Scroll.** Resubmitting a layout for the same revision after QueryField scrolls: is that accepted (only stale
+   revisions are refused, as I read the validation), and does it raise nothing back?
+
+### Tests to carry over
+
+- `verify_query_editing_keys` and `verify_query_occurrence_history`, unchanged: they drive the window.
+- New:
+  - the submitted layout is accepted for combining graphemes, wildcard dots and a scrolled field;
+  - `text_input_caret` sits at QueryField's caret;
+  - the editor's node is the only one and carries the text and selection;
+  - an identical paste over a flag, once the filter exists.
+
 ## Tests that should cover it
 
 - `view_tests`: CSV grid hover, wheel and keys; Markdown keys and links.
