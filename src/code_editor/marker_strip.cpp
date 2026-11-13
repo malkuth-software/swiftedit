@@ -67,7 +67,14 @@ void MarkerStrip::on_paint(gf::Painter &painter, gf::Rect) {
     }
 }
 
-void MarkerStrip::on_pointer(gf::PointerEvent &event) {
+void MarkerStrip::on_mouse_down(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_down(arguments);
+}
+
+void MarkerStrip::handle_pointer(gf::PointerEvent &event) {
     if (event.phase != gf::EventPhase::target || event.action != gf::PointerAction::down ||
         event.button != gf::PointerButton::primary)
         return;

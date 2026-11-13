@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
             wheel.action = gf::PointerAction::wheel;
             wheel.wheel_delta.y = sample % 2 == 0 ? -1 : 1;
             const std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-            (*view).on_pointer(wheel);
+            (*view).handle_pointer(wheel);
             const std::chrono::duration<double, std::milli> initial =
                 std::chrono::steady_clock::now() - start;
             double worst_slice = initial.count();

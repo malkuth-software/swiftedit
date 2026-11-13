@@ -35,8 +35,12 @@ public:
     gf::Size measure(gf::Size) override;
     void arrange(gf::Rect) override;
     void on_paint(gf::Painter &, gf::Rect) override;
-    void on_pointer(gf::PointerEvent &) override;
-    void on_key(gf::KeyEvent &) override;
+    // The routed form of the target phase: the mouse raisers feed it, and
+    // tests drive it directly with a PointerEvent.
+    void handle_pointer(gf::PointerEvent &);
+    // The routed form of a key down at the target: on_key_down feeds it,
+    // and tests drive it directly with a KeyEvent.
+    void handle_key(gf::KeyEvent &);
     [[nodiscard]] const std::string &hovered_url() const { return hovered_url_; }
     [[nodiscard]] std::size_t block_count() const {
         const std::size_t count = blocks_.size();
@@ -44,6 +48,14 @@ public:
     }
 
 protected:
+    // The target phase: each raiser hands the routed form to handle_pointer
+    // or handle_key.
+    void on_mouse_down(gf::MouseEventArgs &arguments) override;
+    void on_mouse_up(gf::MouseEventArgs &arguments) override;
+    void on_mouse_move(gf::MouseEventArgs &arguments) override;
+    void on_mouse_wheel(gf::MouseEventArgs &arguments) override;
+    void on_mouse_leave() override;
+    void on_key_down(gf::KeyEventArgs &arguments) override;
     void on_dispose() noexcept override;
 
 private:

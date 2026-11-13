@@ -178,23 +178,23 @@ void verify_duplicate_formulas() {
     gf::PointerEvent hover{};
     hover.action = gf::PointerAction::move;
     hover.position = {354, 106}; // C2, a reused formula display.
-    (*grid).on_pointer(hover);
+    (*grid).handle_pointer(hover);
     ObservingPainter highlighted{};
     (*grid).on_paint(highlighted, {0, 0, 800, 600});
     check(highlighted.reference_outlines == 1 && (*grid).status() == "=A1*2 | References: A1",
           "Reused formula preserves reference tooltip and visible reference outline");
     window.reset_activity_metrics();
-    (*grid).on_pointer(hover);
+    (*grid).handle_pointer(hover);
     check(window.metrics().snapshot().dirty_marks == 0,
           "Repeated hover in the same cell does not dirty the view");
     hover.position = {4, 46}; // Row/column header area, still inside this control.
-    (*grid).on_pointer(hover);
+    (*grid).handle_pointer(hover);
     ObservingPainter outside{};
     (*grid).on_paint(outside, {0, 0, 800, 600});
     check(outside.reference_outlines == 0 && (*grid).status().empty(),
           "Moving off cells clears stale formula highlights and hover detail");
     window.reset_activity_metrics();
-    (*grid).on_pointer(hover);
+    (*grid).handle_pointer(hover);
     check(window.metrics().snapshot().dirty_marks == 0,
           "Repeated movement outside the grid does not dirty an already clear hover");
     (*grid).set_source("3,=A1*2,=A1*2\n5,=A1*2,=A1*2");
@@ -266,7 +266,7 @@ void verify_cached_conversion() {
         if (scenario == 0) {
             gf::KeyEvent escape{};
             escape.physical_key = gf::PhysicalKey::escape;
-            (*grid).on_key(escape);
+            (*grid).handle_key(escape);
             check(escape.handled, "Escape cancels a pending conversion");
         } else if (scenario == 1) {
             (*grid).select_cell({0, 1});
@@ -358,7 +358,7 @@ void verify_cooperative_formulas() {
     gf::PointerEvent hover{};
     hover.action = gf::PointerAction::move;
     hover.position = {60, 493}; // A16 is beyond the first eight-formula slice.
-    (*grid).on_pointer(hover);
+    (*grid).handle_pointer(hover);
     check((*grid).status() == "Calculating...", "Hover describes a pending result");
     settle_formulas(*grid);
     check((*grid).status() == "=1015 | References:",
@@ -377,7 +377,7 @@ void verify_cooperative_formulas() {
     gf::PointerEvent wheel{};
     wheel.action = gf::PointerAction::wheel;
     wheel.wheel_delta.y = -1;
-    (*grid).on_pointer(wheel);
+    (*grid).handle_pointer(wheel);
     settle_formulas(*grid);
     ObservingPainter scrolled{};
     (*grid).on_paint(scrolled, {0, 0, 800, 600});
@@ -402,19 +402,19 @@ void verify_csv_page_navigation() {
     key.action = gf::KeyAction::down;
     key.physical_key = gf::PhysicalKey::page_down;
     key.modifiers = gf::Modifier::shift;
-    (*grid).on_key(key);
+    (*grid).handle_key(key);
     check(key.handled && (*grid).selected().row == 3 && (*grid).selected().column == 1,
           "CSV Page Down moves by the visible row count");
     check((*grid).copy_cells() == "b\r\ne\r\nh\r\nk", "Shift Page Down retains the rectangle anchor");
     key.physical_key = gf::PhysicalKey::page_up;
     key.modifiers = gf::Modifier::none;
-    (*grid).on_key(key);
+    (*grid).handle_key(key);
     check((*grid).selected().row == 0 && (*grid).copy_cells() == "b", "Page Up returns and collapses selection");
     key.physical_key = gf::PhysicalKey::end;
-    (*grid).on_key(key);
+    (*grid).handle_key(key);
     check((*grid).selected().column == 2, "End reaches the last cell in this row");
     key.modifiers = gf::Modifier::meta;
-    (*grid).on_key(key);
+    (*grid).handle_key(key);
     check((*grid).selected().row == 8 && (*grid).selected().column == 2, "Cmd End reaches final existing cell");
     // LLVM/PE leaf HScrollBar/VScrollBar RTTI is not canonical across the DLL.
     // Inspect the exported behavioral interface and verify its orientation.
@@ -427,15 +427,15 @@ void verify_csv_page_navigation() {
     gf::PointerEvent wheel{};
     wheel.action = gf::PointerAction::wheel;
     wheel.wheel_delta.x = 1;
-    (*grid).on_pointer(wheel);
+    (*grid).handle_pointer(wheel);
     check((*vertical).value.read() == before, "Horizontal-only wheel never scrolls CSV upward");
     key.physical_key = gf::PhysicalKey::page_up;
     key.modifiers = gf::Modifier::none;
-    (*grid).on_key(key);
+    (*grid).handle_key(key);
     check((*grid).selected().row == 5 && (*grid).selected().column == 0, "Page navigation clamps to a ragged row's real cells");
     key.physical_key = gf::PhysicalKey::home;
     key.modifiers = gf::Modifier::control;
-    (*grid).on_key(key);
+    (*grid).handle_key(key);
     check((*grid).selected().row == 0 && (*grid).selected().column == 0, "Ctrl Home reaches the first cell");
 }
 void verify_markdown_preparation() {
@@ -465,7 +465,7 @@ void verify_markdown_preparation() {
     (*view).set_source("# Cancel me");
     gf::KeyEvent escape{};
     escape.physical_key = gf::PhysicalKey::escape;
-    (*view).on_key(escape);
+    (*view).handle_key(escape);
     (*view).on_frame(gf::FrameClock::now());
     ObservingPainter cancelled{};
     (*view).on_paint(cancelled, {0, 0, 640, 480});
@@ -517,7 +517,7 @@ void verify_tall_markdown_visibility() {
     gf::KeyEvent end{};
     end.physical_key = gf::PhysicalKey::end;
     end.modifiers = gf::Modifier::control;
-    (*view).on_key(end);
+    (*view).handle_key(end);
     ObservingPainter bottom{};
     paint_markdown(*view, bottom, {0, 0, 640, 140});
     bool found_tail = false;
@@ -528,7 +528,7 @@ void verify_tall_markdown_visibility() {
         hover.action = gf::PointerAction::move;
         hover.position = {bottom.origins[index].x + bottom.translation.x + 1,
                           bottom.origins[index].y + bottom.translation.y - 2};
-        (*view).on_pointer(hover);
+        (*view).handle_pointer(hover);
         found_tail = (*view).hovered_url() == "https://example.invalid/tail";
     }
     check(found_tail && bottom.texts < 200, "Indexed tail remains painted and link hover remains exact");
@@ -581,7 +581,7 @@ void verify_markdown_layout_slices() {
           "UI timer advances unfinished layout without repainting its unchanged placeholder");
     gf::KeyEvent escape{};
     escape.physical_key = gf::PhysicalKey::escape;
-    (*view).on_key(escape);
+    (*view).handle_key(escape);
     check(escape.handled && !(*view).layout_pending(), "Escape revokes partial layout");
     window.reset_activity_metrics();
     (*view).on_frame(gf::FrameClock::now());
@@ -695,7 +695,7 @@ int main() {
         for (std::size_t column = 0; column < 5; ++column) {
             gf::KeyEvent right{};
             right.physical_key = gf::PhysicalKey::right;
-            (*grid).on_key(right);
+            (*grid).handle_key(right);
             check(right.handled, "CSV arrow navigation handled");
         }
         check((*grid).selected() == swiftedit::CellAddress{0, 5} && (*horizontal).value.read() == 1,
@@ -715,7 +715,7 @@ int main() {
         gf::PointerEvent fitting_wheel{};
         fitting_wheel.action = gf::PointerAction::wheel;
         fitting_wheel.wheel_delta.y = -1;
-        (*grid).on_pointer(fitting_wheel);
+        (*grid).handle_pointer(fitting_wheel);
         check(vertical && (*vertical).orientation.read() == gf::Orientation::vertical && (*vertical).value.read() == 0,
               "Wheel input cannot scroll fitting rows into a disabled placeholder range");
         (*grid).set_source("a,b,c\r\nd\ne,f");
@@ -746,7 +746,7 @@ int main() {
         gf::KeyEvent toggle{};
         toggle.physical_key = 0x38;
         toggle.modifiers = gf::Modifier::control | gf::Modifier::shift;
-        (*query).on_key(toggle);
+        (*query).handle_key(toggle);
         const swiftedit::SearchPattern flagged = (*query).pattern();
         check(toggle.handled && flagged.slots()[1].wildcard && (*query).text() == "a?c",
               "Ctrl-question toggles metadata without rewriting the literal query");
@@ -759,7 +759,7 @@ int main() {
         right_click.action = gf::PointerAction::down;
         right_click.button = gf::PointerButton::secondary;
         right_click.position = {20, 10};
-        (*query).on_pointer(right_click);
+        (*query).handle_pointer(right_click);
         const swiftedit::SearchPattern unflagged = (*query).pattern();
         check(right_click.handled && !unflagged.slots()[1].wildcard,
               "Right-click toggles the hit character back to literal");
@@ -813,7 +813,7 @@ int main() {
         gf::PointerEvent click{};
         click.action = gf::PointerAction::down;
         click.position = {50, 70};
-        (*view).on_pointer(click);
+        (*view).handle_pointer(click);
         check(click.handled, "Rendered clicks are inert");
         (*view).set_source("[first](file:///first)\n\nsecond\n\nthird\n\nfourth\n");
         (*view).arrange({0, 0, 640, 90});
@@ -821,7 +821,7 @@ int main() {
         gf::PointerEvent link_hover{};
         link_hover.action = gf::PointerAction::move;
         link_hover.position = {26, 54};
-        (*view).on_pointer(link_hover);
+        (*view).handle_pointer(link_hover);
         check((*view).hovered_url() == "file:///first", "Visible link exposes its inert URL");
         std::shared_ptr<gf::ScrollBar> markdown_scroll{};
         for (const gf::Control::Ptr &child : (*view).children()) {
@@ -835,36 +835,36 @@ int main() {
         gf::KeyEvent navigation{};
         navigation.action = gf::KeyAction::down;
         navigation.physical_key = gf::PhysicalKey::page_down;
-        (*view).on_key(navigation);
+        (*view).handle_key(navigation);
         check(navigation.handled && (*markdown_scroll).value.read() > 0 && (*view).hovered_url().empty(),
               "Page Down scrolls rendered Markdown and revokes the stale hover");
         navigation.handled = false;
         navigation.physical_key = gf::PhysicalKey::home;
         navigation.modifiers = gf::Modifier::meta;
-        (*view).on_key(navigation);
+        (*view).handle_key(navigation);
         check(navigation.handled && (*markdown_scroll).value.read() == 0, "Mac document Home returns to preview start");
         navigation.physical_key = gf::PhysicalKey::end;
         navigation.modifiers = gf::Modifier::control;
-        (*view).on_key(navigation);
+        (*view).handle_key(navigation);
         const double preview_end = (*markdown_scroll).value.read();
         check(preview_end > 0, "Document End reaches preview bottom");
         navigation.physical_key = gf::PhysicalKey::down;
         navigation.modifiers = gf::Modifier::none;
-        (*view).on_key(navigation);
+        (*view).handle_key(navigation);
         check((*markdown_scroll).value.read() == preview_end, "Arrow scrolling clamps at preview bottom");
         paint_markdown(*view, painter, {0, 0, 640, 90});
         check(painter.measurements == before_navigation, "Keyboard navigation reuses prepared Markdown geometry");
         (*markdown_scroll).value = 32;
         check((*view).hovered_url().empty(), "Scrolling clears the prior link tooltip");
         link_hover.position = {26, 20}; // The old link lies behind the fixed ruler.
-        (*view).on_pointer(link_hover);
+        (*view).handle_pointer(link_hover);
         check((*view).hovered_url().empty(), "Ruler cannot expose a clipped link tooltip");
         (*markdown_scroll).value = 0;
         link_hover.position = {26, 54};
-        (*view).on_pointer(link_hover);
+        (*view).handle_pointer(link_hover);
         check((*view).hovered_url() == "file:///first", "Visible link can be hovered again");
         (*view).set_source("[replacement](file:///replacement)");
-        (*view).on_pointer(link_hover);
+        (*view).handle_pointer(link_hover);
         check((*view).hovered_url().empty(), "Pending layout cannot expose stale source links");
         (*view).arrange({0, 0, 640, 480});
         (*view).set_source("# Changed\n\nAfter revision.");
@@ -875,14 +875,14 @@ int main() {
         gf::PointerEvent wheel{};
         wheel.action = gf::PointerAction::wheel;
         wheel.wheel_delta.y = -1;
-        (*view).on_pointer(wheel);
+        (*view).handle_pointer(wheel);
         paint_markdown(*view, painter, {0, 0, 640, 480});
         check(painter.translation.y == 28, "Fitting content cannot scroll into artificial range");
         navigation.physical_key = gf::PhysicalKey::page_down;
-        (*view).on_key(navigation);
+        (*view).handle_key(navigation);
         check((*markdown_scroll).value.read() == 0, "Keyboard cannot scroll fitting content into artificial range");
         (*view).arrange({0, 0, 640, 90});
-        (*view).on_pointer(wheel);
+        (*view).handle_pointer(wheel);
         paint_markdown(*view, painter, {0, 0, 640, 90});
         check(painter.translation.y < 28, "Height-only shrink updates scroll extent");
         const std::size_t before_expand = painter.measurements;
@@ -895,7 +895,7 @@ int main() {
         const std::size_t before_horizontal = painter.measurements;
         navigation.physical_key = gf::PhysicalKey::right;
         for (unsigned step = 0; step < 3; ++step)
-            (*view).on_key(navigation);
+            (*view).handle_key(navigation);
         painter.labels.clear();
         painter.origins.clear();
         paint_markdown(*view, painter, {0, 0, 640, 480});

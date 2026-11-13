@@ -381,7 +381,7 @@ public:
                 context_press.action = gf::PointerAction::down;
                 context_press.button = gf::PointerButton::secondary;
                 context_press.position = {bounds.x + 56 + 144 + 12, bounds.y + 68 + 12};
-                (*grid).on_pointer(context_press);
+                (*grid).handle_pointer(context_press);
                 require((*grid).context_menu().is_open(), "Native cell context menu opens");
                 const std::vector<gf::MenuItemSpec> &items = (*grid).context_menu().items();
                 require(items.size() == 1 && items[0].text == "Convert to Value",

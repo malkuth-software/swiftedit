@@ -506,7 +506,7 @@ void CsvView::clear_hover() {
         invalidate(gf::Dirty::paint);
     }
 }
-void CsvView::on_pointer(gf::PointerEvent &event) {
+void CsvView::handle_pointer(gf::PointerEvent &event) {
     if (event.phase != gf::EventPhase::target)
         return;
     if (event.action == gf::PointerAction::leave) {
@@ -571,13 +571,44 @@ void CsvView::on_pointer(gf::PointerEvent &event) {
         invalidate(gf::Dirty::paint);
     }
 }
+void CsvView::on_mouse_down(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_down(arguments);
+}
+void CsvView::on_mouse_up(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_up(arguments);
+}
+void CsvView::on_mouse_move(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_move(arguments);
+}
+void CsvView::on_mouse_wheel(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_wheel(arguments);
+}
+void CsvView::on_mouse_leave() {
+    gf::PointerEvent event{};
+    event.action = gf::PointerAction::leave;
+    event.phase = gf::EventPhase::target;
+    handle_pointer(event);
+    gf::Control::on_mouse_leave();
+}
 void CsvView::on_focus_changed(bool focused) {
     if (!focused && conversion_) {
         cancel_conversion();
         invalidate(gf::Dirty::paint);
     }
 }
-void CsvView::on_key(gf::KeyEvent &event) {
+void CsvView::handle_key(gf::KeyEvent &event) {
     if (event.phase != gf::EventPhase::target || event.action != gf::KeyAction::down || !table_)
         return;
     if (event.physical_key == gf::PhysicalKey::escape && conversion_) {
@@ -636,6 +667,14 @@ void CsvView::on_key(gf::KeyEvent &event) {
         invalidate(gf::Dirty::paint);
         event.handled = true;
     }
+}
+void CsvView::on_key_down(gf::KeyEventArgs &arguments) {
+    gf::Control::on_key_down(arguments);
+    if (arguments.handled)
+        return;
+    gf::KeyEvent event = gf::key_event_of(arguments, gf::KeyAction::down);
+    handle_key(event);
+    arguments.handled = event.handled;
 }
 void CsvView::on_paint(gf::Painter &painter, gf::Rect) {
     const gf::Rect bounds = arranged_bounds();

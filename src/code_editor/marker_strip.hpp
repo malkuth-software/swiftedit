@@ -35,7 +35,13 @@ public:
     [[nodiscard]] gui_forms::Event<const highlight::LineMarker &> &activated() noexcept { return activated_; }
 
     void on_paint(gui_forms::Painter &painter, gui_forms::Rect damage) override;
-    void on_pointer(gui_forms::PointerEvent &event) override;
+    // The routed form of the target phase: the mouse raisers feed it, and
+    // tests drive it directly with a PointerEvent.
+    void handle_pointer(gui_forms::PointerEvent &);
+
+protected:
+    // The target phase: on_mouse_down hands the routed form to handle_pointer.
+    void on_mouse_down(gui_forms::MouseEventArgs &arguments) override;
 
 private:
     std::vector<highlight::LineMarker> markers_{};

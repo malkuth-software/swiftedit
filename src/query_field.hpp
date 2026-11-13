@@ -21,12 +21,23 @@ public:
     void select(gf::Utf8Offset, gf::Utf8Offset);
     void toggle_slot(std::size_t);
     void on_paint(gf::Painter &, gf::Rect) override;
-    void on_pointer(gf::PointerEvent &) override;
-    void on_key(gf::KeyEvent &) override;
+    // The routed form of the target phase: the mouse raisers feed it, and
+    // tests drive it directly with a PointerEvent.
+    void handle_pointer(gf::PointerEvent &);
+    // The routed form of a key down at the target: on_key_down feeds it,
+    // and tests drive it directly with a KeyEvent.
+    void handle_key(gf::KeyEvent &);
     void on_text_input(gf::TextInputEvent &) override;
     void on_focus_changed(bool) override;
 
 protected:
+    // The target phase: each raiser hands the routed form to handle_pointer
+    // or handle_key.
+    void on_mouse_down(gf::MouseEventArgs &arguments) override;
+    void on_mouse_up(gf::MouseEventArgs &arguments) override;
+    void on_mouse_move(gf::MouseEventArgs &arguments) override;
+    void on_mouse_leave() override;
+    void on_key_down(gf::KeyEventArgs &arguments) override;
     void on_dispose() noexcept override;
 
 private:
@@ -38,6 +49,9 @@ private:
     Snapshot snapshot() const;
     void restore(const Snapshot &);
     void synchronize(const Snapshot &, bool backward, bool deletion, bool replacement);
+    // The editing keys of a one-line field, applied to the private child
+    // through its public editing calls; sets handled for a key it applies.
+    void edit_key(gf::KeyEvent &);
     void remember(const Snapshot &);
     bool history(bool redo);
     void changed();

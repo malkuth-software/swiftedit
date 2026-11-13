@@ -143,7 +143,8 @@ void verify_document_scrollbars() {
     wheel.action = gf::PointerAction::wheel;
     wheel.position = {bounds.x + 40, bounds.y + 40};
     wheel.wheel_delta = {0, -1};
-    text.on_pointer(wheel);
+    // Through the window: TextBox's mouse raisers are protected (GUI.Forms 0.6).
+    wheel.handled = window.dispatch_pointer(wheel);
     check(wheel.handled && text.scroll_target().y > before_wheel &&
               text.scroll_offset().y == text.vertical_scroll().value(),
           "Wheel scrolling updates the same document scrollbar position");
@@ -1012,7 +1013,7 @@ int main() {
         context_press.action = gf::PointerAction::down;
         context_press.button = gf::PointerButton::secondary;
         context_press.position = {grid_bounds.x + 56 + 144 + 12, grid_bounds.y + 68 + 12};
-        (*grid).on_pointer(context_press);
+        (*grid).handle_pointer(context_press);
         check((*grid).context_menu().is_open(), "Right click opens the cell menu");
         const bool context_executed = (*context_items[0].command).execute("csv.context");
         settle_csv(*grid);

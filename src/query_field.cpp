@@ -239,7 +239,15 @@ void QueryField::on_focus_changed(bool focused) {
     (*edit_).on_focus_changed(focused);
     invalidate(gf::Dirty::paint);
 }
-void QueryField::on_key(gf::KeyEvent &event) {
+void QueryField::on_key_down(gf::KeyEventArgs &arguments) {
+    gf::Control::on_key_down(arguments);
+    if (arguments.handled)
+        return;
+    gf::KeyEvent event = gf::key_event_of(arguments, gf::KeyAction::down);
+    handle_key(event);
+    arguments.handled = event.handled;
+}
+void QueryField::handle_key(gf::KeyEvent &event) {
     if (event.phase != gf::EventPhase::target || event.action != gf::KeyAction::down)
         return;
     // USB HID slash/question key, as normalized by the public host contract.
@@ -261,7 +269,7 @@ void QueryField::on_key(gf::KeyEvent &event) {
     }
     const Snapshot before = snapshot();
     try {
-        (*edit_).on_key(event);
+        edit_key(event);
         const bool backward = event.physical_key == gf::PhysicalKey::backspace;
         const bool deletion = backward || event.physical_key == gf::PhysicalKey::delete_forward;
         const bool replacement = command && event.physical_key == gf::PhysicalKey::v &&
@@ -272,6 +280,58 @@ void QueryField::on_key(gf::KeyEvent &event) {
         throw;
     }
     invalidate(gf::Dirty::paint);
+}
+// GUI.Forms 0.6 removed Control::on_key, and TextBox's key raiser is
+// protected, so the key can no longer be handed to the private child; this
+// applies the editing keys a one-line query needs through the child's public
+// calls, by grapheme (store_ mirrors the child's text). Word movement and
+// the platform's other text keys wait for a public entry for an embedded
+// editor (CONFORMANCE_PREP.md).
+void QueryField::edit_key(gf::KeyEvent &event) {
+    const bool shift = gf::has_modifier(event.modifiers, gf::Modifier::shift);
+    const bool command = gf::has_modifier(event.modifiers, gf::Modifier::control) ||
+                         gf::has_modifier(event.modifiers, gf::Modifier::meta);
+    const std::uint32_t key = event.physical_key;
+    const gf::TextSelection selection = (*edit_).selection();
+    const gf::Utf8Offset end = store_.utf8_size();
+    if (command && !shift && key == gf::PhysicalKey::a) {
+        (*edit_).select_all();
+    } else if (command && !shift && key == gf::PhysicalKey::c) {
+        static_cast<void>((*edit_).copy());
+    } else if (command && !shift && key == gf::PhysicalKey::x) {
+        static_cast<void>((*edit_).cut());
+    } else if (command && !shift && key == gf::PhysicalKey::v) {
+        static_cast<void>((*edit_).paste());
+    } else if (!command && (key == gf::PhysicalKey::left || key == gf::PhysicalKey::right)) {
+        const bool forward = key == gf::PhysicalKey::right;
+        gf::Utf8Offset caret = selection.caret;
+        if (!shift && !selection.empty()) {
+            caret = forward ? selection.end() : selection.start();
+        } else if (forward && caret.value() < end.value()) {
+            caret = store_.next_grapheme_boundary(caret);
+        } else if (!forward && caret.value() > 0) {
+            caret = store_.previous_grapheme_boundary(caret);
+        }
+        (*edit_).select(shift ? selection.anchor : caret, caret);
+    } else if (key == gf::PhysicalKey::home || key == gf::PhysicalKey::end) {
+        const gf::Utf8Offset caret = key == gf::PhysicalKey::home ? gf::Utf8Offset(0) : end;
+        (*edit_).select(shift ? selection.anchor : caret, caret);
+    } else if (!command && (key == gf::PhysicalKey::backspace || key == gf::PhysicalKey::delete_forward)) {
+        if (selection.empty()) {
+            const bool backward = key == gf::PhysicalKey::backspace;
+            if (backward && selection.caret.value() == 0)
+                return;
+            if (!backward && selection.caret.value() >= end.value())
+                return;
+            const gf::Utf8Offset other = backward ? store_.previous_grapheme_boundary(selection.caret)
+                                                  : store_.next_grapheme_boundary(selection.caret);
+            (*edit_).select(other, selection.caret);
+        }
+        static_cast<void>((*edit_).delete_selection());
+    } else {
+        return;
+    }
+    event.handled = true;
 }
 void QueryField::on_text_input(gf::TextInputEvent &event) {
     const Snapshot before = snapshot();
@@ -284,7 +344,32 @@ void QueryField::on_text_input(gf::TextInputEvent &event) {
     }
     invalidate(gf::Dirty::paint);
 }
-void QueryField::on_pointer(gf::PointerEvent &event) {
+void QueryField::on_mouse_down(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_down(arguments);
+}
+void QueryField::on_mouse_up(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_up(arguments);
+}
+void QueryField::on_mouse_move(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_move(arguments);
+}
+void QueryField::on_mouse_leave() {
+    gf::PointerEvent event{};
+    event.action = gf::PointerAction::leave;
+    event.phase = gf::EventPhase::target;
+    handle_pointer(event);
+    gf::Control::on_mouse_leave();
+}
+void QueryField::handle_pointer(gf::PointerEvent &event) {
     if (event.phase != gf::EventPhase::target || layout_dirty_)
         return;
     const double x = event.position.x - absolute_bounds().x;

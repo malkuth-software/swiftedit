@@ -10,7 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
 find_package(Threads REQUIRED)
-find_package(GUIForms 0.2 CONFIG REQUIRED COMPONENTS Application)
+find_package(GUIForms 0.6 CONFIG REQUIRED COMPONENTS Application)
 # The standalone RTF/markdown package, built from the pinned GUI.Forms
 # checkout beside the SDK (pin_note in ci/dependencies.json).
 find_package(stx_rtf2md 0.1 CONFIG REQUIRED)
