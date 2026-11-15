@@ -192,3 +192,19 @@ ctest --test-dir <swiftedit>/build --output-on-failure
   border.
 - The XML lexer's colours for unusual documents (a value spanning lines, a comment opened inside a tag's line).
 - The word-move offsets the new test expects (`one Ytwo Xthree`) follow the engine's word starts as I read them.
+
+## Linux package: the programs alone (owner decision, 2026-11-15)
+
+The owner: "we dont build against any distro"; STXlib is to carry the C library; X11 and XWayland support is
+sufficient for now. `tools/Package-Desktop.py` no longer copies the ldd closure into `lib/` (nor the Debian
+copyright notices of copied libraries) and the launchers no longer set `LD_LIBRARY_PATH`. Each Linux program
+must import only system libraries (the C library, its loader, libgcc_s, libutil for the terminal, and GUI.Forms'
+X11, ATK and GLib host libraries), with every `ldd` line in a system directory; the build-tree RUNPATH is
+removed. Tests: `tests/test_linux_package.py` (run in the publication contract step; passes here), and the Linux
+package step with its packaged startup checks.
+
+Not changed: the Windows package still copies non-system DLLs from the SDK and compiler directories. Under the
+one-module rule it should find none once GUI.Forms and the runtimes are linked statically; turning that copy
+into a refusal, as Plan Paint's `check_system_libraries.py` does, is the coordinator's call.
+Risk: a SwiftEdit dependency linked shared on Linux (md4c, stx_rtf2md, stx_png) now fails packaging instead of
+being copied.

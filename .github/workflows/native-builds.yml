@@ -32,7 +32,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Test publication and installer contracts
-        run: python3 -B -m unittest discover -s tests -p test_publication.py
+        run: |
+          python3 -B -m unittest discover -s tests -p test_publication.py
+          python3 -B -m unittest discover -s tests -p test_linux_package.py
       - name: Select one tested publication version
         id: version
         env:
