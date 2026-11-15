@@ -216,6 +216,12 @@ if(NOTEPAD_BUILD_UI)
   target_compile_definitions(notepad_ui PRIVATE SWIFTEDIT_VERSION="${PROJECT_VERSION}")
   target_link_libraries(notepad_ui PUBLIC notepad_document swiftedit_code_editor GUIForms::Application)
   target_link_libraries(notepad_ui PRIVATE stx_png::stx_png)
+  # The query field is a composite control: its document is checked and its
+  # class (notepad::QueryFieldControl) generated at build time. The header is
+  # public, because query_field.hpp, which the tests include, derives from it.
+  gui_forms_add_control(notepad_ui controls/query-field.control CLASS QueryFieldControl NAMESPACE notepad
+                        OUTPUT gui_forms_controls/query_field_control.hpp)
+  target_include_directories(notepad_ui PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/gui_forms_controls")
   if(APPLE)
     add_executable(notepad MACOSX_BUNDLE src/main.cpp)
     set_target_properties(notepad PROPERTIES

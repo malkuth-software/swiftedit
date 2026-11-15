@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- query-field.control: the find dialog's query field. The edit part is a
+     content text editor (GUI.Forms' content editing mode): it takes the
+     focus, the editing keys, the input method, the clipboard and the one
+     accessible node. The typed class (src/query_field.*) lays the query out,
+     submits the layout to the editor and paints the text, the selection and
+     the caret through the query-text hook, since a flagged grapheme is drawn
+     as a dot. -->
+<control xmlns="urn:gui-forms:control:1" name="query-field" version="1.0"
+         base="user-control" family="editor">
+
+  <part name="face" role="face" box="inset(region, 0)"/>
+  <part name="edge" role="edge" box="inset(region, 0)"/>
+  <part name="query-text" role="label" paint="hook" box="inset(region, 2)"/>
+
+  <children>
+    <!-- One line, so Enter goes on to the find dialog's default button; the
+         field draws the selection and the caret; the pointer passes through
+         to the field, which keeps hit testing, hover and the right-click
+         toggle. -->
+    <content-text-editor id="@editing" dock="fill" multiline="false" draws-selection="false"
+                         hit-test-transparent="true"
+                         accessible-name="Find what; right-click or Control-question to toggle a wildcard"/>
+  </children>
+
+  <focus target="child(@editing)"/>
+  <semantics from="child(@editing)"/>
+</control>

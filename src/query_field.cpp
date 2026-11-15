@@ -2,6 +2,7 @@
 #include "display.hpp"
 #include <algorithm>
 #include <map>
+#include <stdexcept>
 
 namespace notepad {
 namespace {
@@ -14,25 +15,14 @@ constexpr double box_inset = 3;
 const gf::FontSpec query_font{gf::FontRole::content, 14, 400, false};
 } // namespace
 
-QueryField::QueryField(gf::StableId id) : Control(std::move(id)) {
-    // A composite with an edit part keeps focusable false: traversal and
-    // request_focus reach the edit part.
-    focusable = false;
-}
+QueryField::QueryField(gf::StableId id) : QueryFieldControl(std::move(id)) {}
 void QueryField::initialize_control_tree() {
-    edit_ = gf::make_control<gf::ContentTextEditor>(gf::StableId("query.editing"));
-    // One line; Enter passes on to the find dialog's default button.
-    (*edit_).set_multiline(false);
-    // This control paints the selection and the caret with the text.
-    (*edit_).set_draws_selection(false);
-    // The editor fills the field, so its layout, its input-method caret and
-    // its accessible boxes are in this control's coordinates; the pointer
-    // passes through it to this control.
-    (*edit_).dock = gf::DockStyle::fill;
-    (*edit_).hit_test_transparent = true;
-    // The editor's text box node is the field's one accessible node.
-    (*edit_).accessible_name = "Find what; right-click or Control-question to toggle a wildcard";
-    add_child(edit_);
+    // The document's children first: the edit part, already single-line,
+    // drawing no selection, transparent to the pointer and named.
+    QueryFieldControl::initialize_control_tree();
+    edit_ = std::dynamic_pointer_cast<gf::ContentTextEditor>(child("editing"));
+    if (!edit_)
+        throw std::logic_error("query-field.control has no content text editor @editing");
     (*edit_).set_edit_filter(gf::Delegate<gf::TextEdit &>::bind<QueryField, &QueryField::filter_edit>(*this));
     editor_text_ = (*edit_).text_changed().subscribe(
         *this, gf::Delegate<const std::string &>::bind<QueryField, &QueryField::editor_text_changed>(*this));
@@ -52,9 +42,8 @@ void QueryField::on_dispose() noexcept {
     if (edit_)
         (*edit_).set_edit_filter(gf::Delegate<gf::TextEdit &>{});
     pending_.reset();
-    Control::on_dispose();
+    QueryFieldControl::on_dispose();
 }
-gf::Control::Ptr QueryField::focus_target() const { return edit_; }
 QueryField::Snapshot QueryField::snapshot() const {
     Snapshot result{};
     result.text = store_.utf8();
@@ -295,16 +284,19 @@ void QueryField::publish_layout() {
     layout_submitted_ = layout_result_ == gf::ContentLayoutResult::accepted;
 }
 void QueryField::arrange(gf::Rect final_bounds) {
-    gf::Control::arrange(final_bounds);
+    QueryFieldControl::arrange(final_bounds);
     prepare_labels();
     update_scroll();
     publish_layout();
 }
-void QueryField::on_paint(gf::Painter &painter, gf::Rect) {
+// The theme draws the field's face and edge (the document's parts); this
+// draws the query-text part over them. Inside the paint pass: nothing here
+// changes properties, the tree or the layout.
+void QueryField::paint_hook(gf::Painter &painter, const gf::CompositePaintHook &hook) {
+    if (hook.part != "query-text")
+        return;
     const gf::Rect bounds = arranged_bounds();
     const gf::BasicControlStyle &style = effective_theme().basic_style();
-    painter.fill_rect({0, 0, bounds.width, bounds.height}, style.paper);
-    painter.stroke_rect({0, 0, bounds.width, bounds.height}, style.border, 1);
     // Labels are measured outside paint (prepare_labels); until they are,
     // the field shows its frame only.
     if (layout_dirty_ || edges_.size() != slots_.size() + 1)
@@ -316,7 +308,7 @@ void QueryField::on_paint(gf::Painter &painter, gf::Rect) {
     const bool caret_known =
         selection.caret.value() <= store_.utf8().size() && store_.is_grapheme_boundary(selection.caret);
     painter.save();
-    painter.clip_rect({2, 2, std::max(0.0, bounds.width - 4), std::max(0.0, bounds.height - 4)});
+    painter.clip_rect(hook.bounds);
     for (std::size_t index = hit(0); index < slots_.size(); ++index) {
         const double x = text_left + edges_[index] - scroll_;
         if (x > bounds.width)
@@ -442,26 +434,26 @@ void QueryField::on_mouse_down(gf::MouseEventArgs &arguments) {
     gf::PointerEvent event = gf::pointer_event_of(arguments);
     handle_pointer(event);
     arguments.handled = event.handled;
-    gf::Control::on_mouse_down(arguments);
+    QueryFieldControl::on_mouse_down(arguments);
 }
 void QueryField::on_mouse_up(gf::MouseEventArgs &arguments) {
     gf::PointerEvent event = gf::pointer_event_of(arguments);
     handle_pointer(event);
     arguments.handled = event.handled;
-    gf::Control::on_mouse_up(arguments);
+    QueryFieldControl::on_mouse_up(arguments);
 }
 void QueryField::on_mouse_move(gf::MouseEventArgs &arguments) {
     gf::PointerEvent event = gf::pointer_event_of(arguments);
     handle_pointer(event);
     arguments.handled = event.handled;
-    gf::Control::on_mouse_move(arguments);
+    QueryFieldControl::on_mouse_move(arguments);
 }
 void QueryField::on_mouse_leave() {
     gf::PointerEvent event{};
     event.action = gf::PointerAction::leave;
     event.phase = gf::EventPhase::target;
     handle_pointer(event);
-    gf::Control::on_mouse_leave();
+    QueryFieldControl::on_mouse_leave();
 }
 void QueryField::handle_pointer(gf::PointerEvent &event) {
     if (event.phase != gf::EventPhase::target || layout_dirty_)

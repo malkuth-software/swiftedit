@@ -84,6 +84,18 @@ its prep branch is built against this one (`-DSWIFTEDIT_SOURCE_DIR`).
    - the edit filter (`set_edit_filter`) keeps the flags exact and enforces the 4096-byte budget, so a refused edit
      leaves no history; QueryField's own undo history stays the only one used.
 
+8. **QueryField as a composite control** (this batch). `controls/query-field.control` declares the field: the face
+   and edge parts (drawn by the theme), the `query-text` part (`paint="hook"`), the `content-text-editor` child
+   `@editing` (fill, single line, no selection drawing, pointer-transparent, the accessible name), the focus
+   target and `<semantics from="child(@editing)"/>`. `gui_forms_add_control` generates `notepad::QueryFieldControl`
+   into a public include directory of `notepad_ui`, and `QueryField` derives from it:
+   - `initialize_control_tree` makes the document's children, then finds `@editing` and subscribes to it (edit
+     filter, text, selection, focus, layout requests), as before;
+   - `paint_hook` draws the labels, the selection, the hover box and the caret, clipped to the part; the theme
+     draws the frame, which QueryField painted itself before;
+   - the focus override, `focusable = false` and the editor's property writes are gone: the document says them;
+   - the layout, the flags, the history, the key preview and the pointer handling are unchanged.
+
 ## Composite focus, rechecked against cp33
 
 The three gaps 336a43d found are closed by the content editing mode (item 7), not by composites:
@@ -95,18 +107,14 @@ The three gaps 336a43d found are closed by the content editing mode (item 7), no
 3. **Staying out of the semantic tree:** closed. The editor's text box node (text, selection, caret, text layout) is
    the field's only node; QueryField publishes no name.
 
-QueryField is not a `CompositeControl` (`.control`). What is missing in GUI.Forms' composites, reported to the
-coordinator:
+**QueryField is a composite now** (item 8). GUI.Forms closed the three composite gaps this section reported
+(`claude/composite-focus-gaps` 5c977d83f, folded into batch-cp33):
 
-- **A. Semantics from the focus target.** A focusable composite must declare its own role and name, and
-  `children="hidden"` or `"exposed"`. A composite whose meaning is its edit part cannot hand its one node to that
-  child: hidden loses the editor's text, selection and text layout; exposed publishes two nodes. Wanted: a
-  composite that publishes its focus target's node as its own (for example `<semantics from="child(editing)"/>`).
-- **B. The content editor's properties in a control document.** `set_multiline` and `set_draws_selection` are not
-  document properties of `content-text-editor`, so a `.control` cannot declare the edit part QueryField needs.
-- **C. Consumer painting over a part.** Since db7ce9306 a `CompositeControl` is made only from a definition, so a
-  C++ subclass cannot paint the composite's text over its edit part. QueryField paints its text itself (flagged
-  graphemes as dots), so it needs a composite paint hook, or it stays a hand-written control, as now.
+- **A.** `<semantics from="child(@editing)"/>` hands the composite's node to its focus target, so the editor's text
+  box node is the field's one node.
+- **B.** `multiline` and `draws-selection` are document properties of `content-text-editor`.
+- **C.** A part declared `paint="hook"` is drawn by the typed class through `CompositeControl::paint_hook`; a class
+  deriving from the generated one passes its definition through the generated constructor.
 
 ## The content editing mode plan
 
@@ -140,6 +148,9 @@ Left for later: a description naming the flagged positions in the editor's node.
     scrolled field; the input caret at QueryField's caret; the editor's node), with
     `verify_query_occurrence_history` and `verify_query_editing_keys` unchanged;
   - `view_tests` query cases (paint measures only the baseline now);
+  - item 8: `editor_tests` `verify_query_content_layout` (no node of the field's own, the document's focus target
+    and editor properties, the hook part's box); the `query-field.control` generation at build time (the form
+    compiler checks the document); `view_tests` query paint through the hook (`on_paint` draws the labels);
   - the app's form generation (`gui_forms_add_form`), the macOS native fixtures with faces from the pack, and the
     Linux and Windows packaging smoke runs.
 
@@ -149,7 +160,6 @@ Left for later: a description naming the flagged positions in the editor's node.
   - the GUI.Forms revision and the four cache digests in `ci/dependencies.json`;
   - the template_harness commit in `harness.lock`.
   - Both move at the conformance rebase. `prepare_dependencies.py` requires `harness.lock` to equal GUI.Forms' own.
-- **Composite gaps A, B and C above**, before QueryField can become a `CompositeControl`.
 - **STXlib boundary types** (the swap-in): the `std::string` and `std::vector` crossings of the GUI.Forms API move
   when the owned types land.
 - **Font family:** the bundled body face selection. SwiftEdit's editor and views use the theme's faces.
@@ -177,5 +187,8 @@ ctest --test-dir <swiftedit>/build --output-on-failure
 - Signature drift in calls whose names survived.
 - QueryField (2ea5ef6): the order of `arrange`, the label measure and the first `layout_requested`; whether a
   pointer press on the field (the editor is pointer-transparent) places the caret as the tests expect.
+- QueryField as a composite: whether `CompositeControl`'s own mouse raisers, which run after QueryField's, leave
+  the press handled; whether the theme's face and edge for an `editor` family composite look like the old paper and
+  border.
 - The XML lexer's colours for unusual documents (a value spanning lines, a comment opened inside a tag's line).
 - The word-move offsets the new test expects (`one Ytwo Xthree`) follow the engine's word starts as I read them.

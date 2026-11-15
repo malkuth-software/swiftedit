@@ -914,6 +914,13 @@ void verify_query_content_layout() {
     check(node.role == gf::SemanticRole::text_box && node.value == "find me" && !node.name.empty(),
           "The editor's text box node carries the query's text and name");
     check((*query).accessible_name.read().empty(), "QueryField publishes no name of its own beside the editor");
+    // The composite (controls/query-field.control) hands its node to the
+    // editor and draws its text through the query-text hook.
+    check(!(*query).semantic_descriptor().exposed, "QueryField publishes no node of its own");
+    check((*query).focus_target() == editing, "The document's focus target is the edit part");
+    check((*editing).hit_test_transparent.read() && !(*editing).multiline() && !(*editing).draws_selection(),
+          "The document makes the edit part single-line, pointer-transparent and selection-free");
+    check((*query).part_bounds("query-text").width > 0, "The query-text hook part has its box");
     host.shutdown();
 }
 int main() {
