@@ -1,4 +1,4 @@
-"""Package tested Windows/Linux binaries: Windows with its non-system DLL closure, Linux as the programs alone."""
+"""Package tested Windows/Linux binaries: the programs alone, importing only system libraries."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -28,39 +28,42 @@ def digest(path: Path) -> str:
     return result
 
 
-def windows_libraries(executables: list[Path], destination: Path, sdk: Path) -> None:
+def windows_refusals(imports: list[str], system: Path) -> list[str]:
+    """Each imported DLL that is not a Windows system DLL in `system`.
+
+    `imports` are the DLL Name entries objdump -p lists. API sets resolve in
+    the loader; every other DLL must lie in System32.
+    """
+    refused: list[str] = []
+    dependency: str
+    for dependency in imports:
+        if dependency.casefold().startswith(('api-ms-win-', 'ext-ms-win-')):
+            continue
+        if not (system / dependency).is_file():
+            refused.append(dependency)
+    return refused
+
+
+def windows_programs_only(executables: list[Path]) -> None:
+    """Refuse a program importing any DLL but Windows' own (one module, 2026-11-15).
+
+    GUI.Forms, the codecs and the LLVM runtimes are linked into each program,
+    so nothing is copied beside it; a non-system import fails the package.
+    """
     tool: str | None = shutil.which('objdump')
     if tool is None:
         raise RuntimeError('objdump is required for dependency inspection')
     system: Path = Path(os.environ['WINDIR']) / 'System32'
-    directories: list[Path] = [executables[0].parent, sdk / 'gui-forms-sdk/bin', Path(tool).parent, system]
-    pending: list[Path] = list(executables)
-    seen: set[str] = set()
-    while pending:
-        binary: Path = pending.pop()
+    failures: list[str] = []
+    binary: Path
+    for binary in executables:
         listing: str = run([tool, '-p', str(binary)])
+        imports: list[str] = re.findall(r'DLL Name:\s*(\S+)', listing)
         dependency: str
-        for dependency in re.findall(r'DLL Name:\s*(\S+)', listing):
-            key: str = dependency.casefold()
-            if key in seen or key.startswith(('api-ms-win-', 'ext-ms-win-')):
-                continue
-            seen.add(key)
-            found: Path | None = None
-            directory: Path
-            for directory in directories:
-                candidate: Path = directory / dependency
-                if candidate.is_file():
-                    found = candidate.resolve()
-                    break
-            if found is None:
-                raise RuntimeError('Unresolved Windows dependency: ' + dependency)
-            if found.is_relative_to(system.resolve()):
-                continue
-            target: Path = destination / dependency
-            if target.exists() and digest(target) != digest(found):
-                raise RuntimeError('Conflicting runtime dependency: ' + dependency)
-            shutil.copy2(found, target)
-            pending.append(found)
+        for dependency in windows_refusals(imports, system):
+            failures.append(binary.name + ': ' + dependency)
+    if failures:
+        raise RuntimeError('A shipped program imports only system DLLs; found:\n  ' + '\n  '.join(failures))
 
 
 # One module (owner, 2026-11-15): a Linux package carries the programs alone
@@ -143,7 +146,6 @@ def main() -> None:
     root.mkdir()
     binaries: Path = root if windows else root / 'bin'
     binaries.mkdir(exist_ok=True)
-    libraries: Path = root
     suffix: str = '.exe' if windows else ''
     originals: list[Path] = []
     packaged: list[Path] = []
@@ -155,7 +157,7 @@ def main() -> None:
         originals.append(source)
         packaged.append(target)
     if windows:
-        windows_libraries(originals, libraries, sdk)
+        windows_programs_only(originals)
     else:
         linux_programs_only(packaged)
         for name in ['SwiftEdit', 'swiftedit-terminal', 'swiftedit-cli']:

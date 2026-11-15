@@ -200,11 +200,11 @@ sufficient for now. `tools/Package-Desktop.py` no longer copies the ldd closure 
 copyright notices of copied libraries) and the launchers no longer set `LD_LIBRARY_PATH`. Each Linux program
 must import only system libraries (the C library, its loader, libgcc_s, libutil for the terminal, and GUI.Forms'
 X11, ATK and GLib host libraries), with every `ldd` line in a system directory; the build-tree RUNPATH is
-removed. Tests: `tests/test_linux_package.py` (run in the publication contract step; passes here), and the Linux
+removed. Tests: `tests/test_package_imports.py` (run in the publication contract step; passes here), and the Linux
 package step with its packaged startup checks.
 
-Not changed: the Windows package still copies non-system DLLs from the SDK and compiler directories. Under the
-one-module rule it should find none once GUI.Forms and the runtimes are linked statically; turning that copy
-into a refusal, as Plan Paint's `check_system_libraries.py` does, is the coordinator's call.
+Windows (coordinator, option a): the DLL copy is now a refusal. Each program may import only DLLs present in
+System32 and API sets; GUI.Forms, the codecs and the LLVM runtimes must be linked in, so nothing is copied
+beside the programs. `tests/test_package_imports.py` covers both platforms' classification.
 Risk: a SwiftEdit dependency linked shared on Linux (md4c, stx_rtf2md, stx_png) now fails packaging instead of
 being copied.

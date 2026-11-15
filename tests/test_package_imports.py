@@ -1,7 +1,8 @@
-"""A Linux package carries the programs alone: only system imports pass."""
+"""A package carries the programs alone: only system imports pass (Linux and Windows)."""
 import importlib.util
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 TOOLS: Path = Path(__file__).resolve().parents[1] / 'tools'
@@ -32,6 +33,16 @@ class LinuxPackageTests(unittest.TestCase):
         self.assertTrue(refused[1].startswith('libmd4c.so.0 => /usr/local/lib/'))
         self.assertEqual(refused[2], 'libstx.so.1 => not found')
         self.assertEqual(len(refused), 3)
+
+
+    def test_windows_admits_system32_and_api_sets_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            system: Path = Path(directory)
+            (system / 'KERNEL32.dll').write_bytes(b'')
+            (system / 'USER32.dll').write_bytes(b'')
+            imports: list[str] = ['KERNEL32.dll', 'api-ms-win-crt-runtime-l1-1-0.dll', 'USER32.dll',
+                                  'libc++.dll', 'gui_forms_core.dll']
+            self.assertEqual(package_desktop.windows_refusals(imports, system), ['libc++.dll', 'gui_forms_core.dll'])
 
 
 if __name__ == '__main__':
