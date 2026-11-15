@@ -787,8 +787,8 @@ bool press_query_key(gf::Window &window, std::uint32_t physical_key, gf::Modifie
     const bool handled = window.dispatch_key(key);
     return handled;
 }
-// QueryField is a composite whose edit part (its TextBox) takes the focus, so
-// the editing keys reach the TextBox itself. Each key is checked by its effect
+// QueryField is a composite whose edit part (a ContentTextEditor) takes the
+// focus, so the editing keys reach the editor itself. Each key is checked by its effect
 // on the text, through the window as the host delivers it.
 void verify_query_editing_keys() {
     const std::shared_ptr<notepad::QueryField> query =
@@ -869,6 +869,53 @@ void verify_query_editing_keys() {
           "Control+Z reaches the query's own history, not the edit part's");
     host.shutdown();
 }
+// QueryField over the content editing mode: the layout it submits is
+// accepted for combining graphemes, wildcard dots and a scrolled field; the
+// input method's caret is QueryField's own caret; and the editor's text box
+// node is the one that carries the query.
+void verify_query_content_layout() {
+    const std::shared_ptr<notepad::QueryField> query =
+        gf::make_control<notepad::QueryField>(gf::StableId("query.layout"));
+    gf::Window window(query, {160, 30});
+    TestServices services{};
+    gf::HostSession host(window, capabilities(), &services);
+    check(host.dispatch({1, 0, gf::HostAttachEvent{{160, 30}, 1}}).accepted(), "Query layout host attached");
+    window.perform_layout();
+    check(window.request_focus(query), "Query layout fixture accepts focus");
+    const std::shared_ptr<gf::ContentTextEditor> editing =
+        std::dynamic_pointer_cast<gf::ContentTextEditor>(window.focused_control());
+    check(editing != nullptr, "The query's edit part is a ContentTextEditor");
+    if (!editing) {
+        host.shutdown();
+        return;
+    }
+    (*query).set_text("a\xcc\x81" "b?c");
+    check((*query).layout_result() == gf::ContentLayoutResult::accepted && (*editing).layout_current(),
+          "A layout with a combining grapheme is accepted for the editor's revision");
+    (*query).toggle_slot(2);
+    check((*query).layout_result() == gf::ContentLayoutResult::accepted && (*editing).layout_current(),
+          "A wildcard dot's narrower box is accepted");
+    check(window.dispatch_text({"x"}) && (*query).layout_result() == gf::ContentLayoutResult::accepted &&
+              (*editing).layout_current(),
+          "Typing resubmits the layout for the new revision");
+    (*query).set_text(std::string(80, 'm'));
+    (*query).select(gf::Utf8Offset(80), gf::Utf8Offset(80));
+    check((*query).layout_result() == gf::ContentLayoutResult::accepted && (*editing).layout_current(),
+          "A field scrolled to its end resubmits an accepted layout");
+    const std::optional<gf::Rect> caret = (*editing).caret_rectangle();
+    const std::optional<gf::Rect> input_caret = window.text_input_caret();
+    check(caret.has_value() && (*caret).x >= 0 && (*caret).x <= 160,
+          "The scrolled caret stays inside the field");
+    check(caret.has_value() && input_caret.has_value() && (*input_caret).x == (*caret).x,
+          "The input method's caret is QueryField's caret, not the field's left edge");
+    (*query).set_text("find me");
+    (*query).select(gf::Utf8Offset(0), gf::Utf8Offset(4));
+    const gf::SemanticDescriptor node = (*editing).semantic_descriptor();
+    check(node.role == gf::SemanticRole::text_box && node.value == "find me" && !node.name.empty(),
+          "The editor's text box node carries the query's text and name");
+    check((*query).accessible_name.read().empty(), "QueryField publishes no name of its own beside the editor");
+    host.shutdown();
+}
 int main() {
     try {
         verify_theme_package();
@@ -877,6 +924,7 @@ int main() {
         verify_document_scrollbars();
         verify_query_occurrence_history();
         verify_query_editing_keys();
+        verify_query_content_layout();
         verify_callback_revocation();
         verify_file_shortcuts();
         verify_startup_rtf_summary();

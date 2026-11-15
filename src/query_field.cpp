@@ -4,18 +4,34 @@
 #include <map>
 
 namespace notepad {
+namespace {
+// The query's byte budget, as the find dialog has always had it.
+constexpr std::size_t query_byte_budget = 4096;
+// The text area's inset from the field's left edge, and the label boxes'
+// inset from its top and bottom.
+constexpr double text_left = 6;
+constexpr double box_inset = 3;
+const gf::FontSpec query_font{gf::FontRole::content, 14, 400, false};
+} // namespace
+
 QueryField::QueryField(gf::StableId id) : Control(std::move(id)) {
     // A composite with an edit part keeps focusable false: traversal and
     // request_focus reach the edit part.
     focusable = false;
-    accessible_name = "Find what; right-click or Control-question to toggle a wildcard";
 }
 void QueryField::initialize_control_tree() {
-    edit_ = gf::make_control<gf::TextBox>(gf::StableId("query.editing"));
-    (*edit_).maximum_length = 4096;
-    // Visible, so it can hold focus, but arranged to an empty box: this
-    // control paints the query and takes the pointer.
-    (*edit_).set_requested_bounds({0, 0, 0, 0});
+    edit_ = gf::make_control<gf::ContentTextEditor>(gf::StableId("query.editing"));
+    // One line; Enter passes on to the find dialog's default button.
+    (*edit_).set_multiline(false);
+    // This control paints the selection and the caret with the text.
+    (*edit_).set_draws_selection(false);
+    // The editor fills the field, so its layout, its input-method caret and
+    // its accessible boxes are in this control's coordinates; the pointer
+    // passes through it to this control.
+    (*edit_).dock = gf::DockStyle::fill;
+    (*edit_).hit_test_transparent = true;
+    // The editor's text box node is the field's one accessible node.
+    (*edit_).accessible_name = "Find what; right-click or Control-question to toggle a wildcard";
     add_child(edit_);
     (*edit_).set_edit_filter(gf::Delegate<gf::TextEdit &>::bind<QueryField, &QueryField::filter_edit>(*this));
     editor_text_ = (*edit_).text_changed().subscribe(
@@ -25,11 +41,14 @@ void QueryField::initialize_control_tree() {
         gf::Delegate<const gf::TextSelection &>::bind<QueryField, &QueryField::editor_selection_changed>(*this));
     editor_focus_ = (*edit_).focus_observed().subscribe(
         *this, gf::Delegate<bool>::bind<QueryField, &QueryField::editor_focus_changed>(*this));
+    editor_layout_ = (*edit_).layout_requested().subscribe(
+        *this, gf::Delegate<std::uint64_t>::bind<QueryField, &QueryField::editor_layout_requested>(*this));
 }
 void QueryField::on_dispose() noexcept {
     editor_text_.disconnect();
     editor_selection_.disconnect();
     editor_focus_.disconnect();
+    editor_layout_.disconnect();
     if (edit_)
         (*edit_).set_edit_filter(gf::Delegate<gf::TextEdit &>{});
     pending_.reset();
@@ -48,6 +67,10 @@ void QueryField::changed() {
     ++revision_;
     hovered_.reset();
     layout_dirty_ = true;
+    layout_submitted_ = false;
+    prepare_labels();
+    update_scroll();
+    publish_layout();
     invalidate(gf::Dirty::paint);
 }
 void QueryField::restore(const Snapshot &value) {
@@ -61,7 +84,7 @@ void QueryField::restore(const Snapshot &value) {
         slots[index].wildcard = value.flags[index];
     restoring_ = true;
     try {
-        (*edit_).text = value.text;
+        (*edit_).set_text(value.text);
     } catch (...) {
         restoring_ = false;
         throw;
@@ -97,7 +120,7 @@ bool QueryField::history(bool redo) {
     return true;
 }
 void QueryField::set_text(std::string value) {
-    if (value.size() > 4096)
+    if (value.size() > query_byte_budget)
         throw std::runtime_error("Search text exceeds 4096 bytes.");
     Snapshot next{};
     next.text = std::move(value);
@@ -108,7 +131,7 @@ void QueryField::set_text(std::string value) {
 std::string_view QueryField::text() const { return store_.utf8(); }
 void QueryField::synchronize(const Snapshot &before, std::string_view value, std::size_t start,
                              std::size_t removed, std::size_t inserted) {
-    if (value.size() > 4096) {
+    if (value.size() > query_byte_budget) {
         restore(before);
         return;
     }
@@ -159,82 +182,158 @@ void QueryField::toggle_slot(std::size_t slot) {
     remember(before);
     slots_[slot].wildcard = !slots_[slot].wildcard;
     ++revision_;
+    // A dot and a literal differ in width, so the labels and the layout
+    // change with the flag.
     layout_dirty_ = true;
+    layout_submitted_ = false;
+    prepare_labels();
+    update_scroll();
+    publish_layout();
     invalidate(gf::Dirty::paint);
 }
 std::size_t QueryField::hit(double x) const {
-    const double position = x - 6 + scroll_;
+    const double position = x - text_left + scroll_;
     const std::vector<double>::const_iterator edge =
         std::upper_bound(edges_.begin(), edges_.end(), position);
     const std::size_t index = static_cast<std::size_t>(edge - edges_.begin());
     const std::size_t slot = index ? index - 1 : 0;
     return std::min(slot, slots_.size());
 }
+void QueryField::prepare_labels() {
+    if (!layout_dirty_ || !window())
+        return;
+    std::vector<double> next{0};
+    std::vector<std::string> labels{};
+    next.reserve(slots_.size() + 1);
+    labels.reserve(slots_.size());
+    // Metrics belong to this rebuild only. Repeated bullets or literals share
+    // measurement without retaining stale metrics.
+    std::map<std::string, double> widths{};
+    for (const swiftedit::SearchSlot &slot : slots_) {
+        std::string label = "\xe2\x80\xa2";
+        if (!slot.wildcard) {
+            const swiftedit::DisplayPage display(slot.literal);
+            label = display.text();
+        }
+        const std::map<std::string, double>::const_iterator found = widths.find(label);
+        double width = 0;
+        if (found != widths.end())
+            width = (*found).second;
+        else {
+            const gf::TextExtent extent = (*window()).measure_text_extent_utf8(label, query_font);
+            width = std::max(12.0, extent.logical_size.width + 4);
+            widths.emplace(label, width);
+        }
+        next.push_back(next.back() + width);
+        labels.push_back(std::move(label));
+    }
+    edges_ = std::move(next);
+    labels_ = std::move(labels);
+    layout_dirty_ = false;
+    layout_submitted_ = false;
+}
+void QueryField::update_scroll() {
+    if (layout_dirty_ || edges_.size() != slots_.size() + 1)
+        return;
+    const gf::TextSelection selection = (*edit_).selection();
+    // The editor reports its selection before this control has taken the
+    // edit's text; the scroll follows when the texts agree again.
+    if (selection.caret.value() > store_.utf8().size() || !store_.is_grapheme_boundary(selection.caret))
+        return;
+    const std::size_t caret = store_.grapheme_index(selection.caret).value();
+    const double width = std::max(1.0, arranged_bounds().width - 2 * text_left);
+    double next = scroll_;
+    if (edges_[caret] < next)
+        next = edges_[caret];
+    if (edges_[caret] > next + width)
+        next = edges_[caret] - width;
+    next = std::max(0.0, std::min(next, edges_.back() - width));
+    if (next == scroll_)
+        return;
+    scroll_ = next;
+    layout_submitted_ = false;
+    publish_layout();
+    invalidate(gf::Dirty::paint);
+}
+gf::ContentTextLayout QueryField::content_layout() const {
+    const double height = arranged_bounds().height;
+    const double box_height = std::max(0.0, height - 2 * box_inset);
+    gf::ContentTextLayout layout{};
+    layout.text_revision = (*edit_).text_revision();
+    gf::ContentTextLine line{};
+    line.range = gf::Utf8Range{gf::Utf8Offset(0), gf::Utf8Offset(store_.utf8().size())};
+    line.bounds = gf::Rect{text_left - scroll_, box_inset, edges_.back(), box_height};
+    layout.lines.push_back(line);
+    layout.clusters.reserve(slots_.size());
+    layout.carets.reserve(slots_.size() + 1);
+    for (std::size_t index = 0; index < slots_.size(); ++index) {
+        gf::ContentTextCluster cluster{};
+        cluster.range = store_.grapheme_range(gf::GraphemeIndex(index));
+        cluster.line = 0;
+        cluster.bounds = gf::Rect{text_left + edges_[index] - scroll_, box_inset, edges_[index + 1] - edges_[index],
+                                  box_height};
+        layout.clusters.push_back(cluster);
+    }
+    // The stops are given, not derived from the boxes: the caret this
+    // control paints is a bar one unit wide at each grapheme's left edge.
+    for (std::size_t index = 0; index <= slots_.size(); ++index) {
+        gf::ContentCaretStop stop{};
+        stop.offset = store_.utf8_offset(gf::GraphemeIndex(index));
+        stop.caret = gf::Rect{text_left + edges_[index] - scroll_, box_inset + 1, 1, std::max(0.0, box_height - 2)};
+        layout.carets.push_back(stop);
+    }
+    return layout;
+}
+void QueryField::publish_layout() {
+    if (!edit_ || layout_submitted_ || layout_dirty_ || edges_.size() != slots_.size() + 1)
+        return;
+    // Between the editor's change and this control's synchronization the
+    // texts differ; the layout follows once they agree.
+    if ((*edit_).text() != store_.utf8())
+        return;
+    layout_result_ = (*edit_).submit_layout(content_layout());
+    layout_submitted_ = layout_result_ == gf::ContentLayoutResult::accepted;
+}
+void QueryField::arrange(gf::Rect final_bounds) {
+    gf::Control::arrange(final_bounds);
+    prepare_labels();
+    update_scroll();
+    publish_layout();
+}
 void QueryField::on_paint(gf::Painter &painter, gf::Rect) {
     const gf::Rect bounds = arranged_bounds();
     const gf::BasicControlStyle &style = effective_theme().basic_style();
-    const gf::FontSpec font{gf::FontRole::content, 14, 400, false};
-    const gf::ResolvedTextLayout font_metrics = painter.resolve_text_layout_utf8("Mg", font);
-    const double baseline = (bounds.height - font_metrics.ascent - font_metrics.descent) * 0.5 +
-                            font_metrics.ascent;
-    if (layout_dirty_) {
-        std::vector<double> next{0};
-        std::vector<std::string> labels{};
-        next.reserve(slots_.size() + 1);
-        labels.reserve(slots_.size());
-        // Metrics belong to this painter/font and this rebuild only. Repeated
-        // bullets or literals share measurement without retaining stale metrics.
-        std::map<std::string, double> widths{};
-        for (const swiftedit::SearchSlot &slot : slots_) {
-            std::string label = "\xe2\x80\xa2";
-            if (!slot.wildcard) {
-                const swiftedit::DisplayPage display(slot.literal);
-                label = display.text();
-            }
-            const std::map<std::string, double>::const_iterator found = widths.find(label);
-            double width = 0;
-            if (found != widths.end())
-                width = (*found).second;
-            else {
-                const gf::Size size = painter.measure_text_utf8(label, font);
-                width = std::max(12.0, size.width + 4);
-                widths.emplace(label, width);
-            }
-            next.push_back(next.back() + width);
-            labels.push_back(std::move(label));
-        }
-        edges_ = std::move(next);
-        labels_ = std::move(labels);
-        layout_dirty_ = false;
-    }
-    const gf::TextSelection selection = (*edit_).selection();
-    const std::size_t caret = store_.grapheme_index(selection.caret).value();
-    const double width = std::max(1.0, bounds.width - 12);
-    if (edges_[caret] < scroll_)
-        scroll_ = edges_[caret];
-    if (edges_[caret] > scroll_ + width)
-        scroll_ = edges_[caret] - width;
-    scroll_ = std::min(scroll_, std::max(0.0, edges_.back() - width));
     painter.fill_rect({0, 0, bounds.width, bounds.height}, style.paper);
     painter.stroke_rect({0, 0, bounds.width, bounds.height}, style.border, 1);
+    // Labels are measured outside paint (prepare_labels); until they are,
+    // the field shows its frame only.
+    if (layout_dirty_ || edges_.size() != slots_.size() + 1)
+        return;
+    const gf::ResolvedTextLayout font_metrics = painter.resolve_text_layout_utf8("Mg", query_font);
+    const double baseline = (bounds.height - font_metrics.ascent - font_metrics.descent) * 0.5 +
+                            font_metrics.ascent;
+    const gf::TextSelection selection = (*edit_).selection();
+    const bool caret_known =
+        selection.caret.value() <= store_.utf8().size() && store_.is_grapheme_boundary(selection.caret);
     painter.save();
     painter.clip_rect({2, 2, std::max(0.0, bounds.width - 4), std::max(0.0, bounds.height - 4)});
     for (std::size_t index = hit(0); index < slots_.size(); ++index) {
-        const double x = 6 + edges_[index] - scroll_;
+        const double x = text_left + edges_[index] - scroll_;
         if (x > bounds.width)
             break;
         const gf::Utf8Range range = store_.grapheme_range(gf::GraphemeIndex(index));
-        const gf::Rect box{x, 3, edges_[index + 1] - edges_[index], bounds.height - 6};
+        const gf::Rect box{x, box_inset, edges_[index + 1] - edges_[index], bounds.height - 2 * box_inset};
         if (range.start.value() >= selection.start().value() &&
             range.end.value() <= selection.end().value())
             painter.fill_rect(box, style.face_light);
         if (hovered_ == index)
             painter.stroke_rect(box, style.border, 1);
-        painter.draw_text_utf8({x + 2, baseline}, labels_[index], font,
+        painter.draw_text_utf8({x + 2, baseline}, labels_[index], query_font,
                                slots_[index].wildcard ? style.link : style.text);
     }
-    if (focused_) {
-        const double x = 6 + edges_[caret] - scroll_;
+    if (focused_ && caret_known) {
+        const std::size_t caret = store_.grapheme_index(selection.caret).value();
+        const double x = text_left + edges_[caret] - scroll_;
         painter.draw_line({x, 4}, {x, bounds.height - 4}, style.text, 1);
     }
     painter.restore();
@@ -265,6 +364,14 @@ void QueryField::on_key_preview(gf::KeyEvent &event) {
 // changes no text and raises no text_changed, so it is applied here: it
 // still turns the flags it covers literal.
 void QueryField::filter_edit(gf::TextEdit &edit) {
+    const std::size_t current_size = store_.utf8().size();
+    const std::size_t removed = edit.end.value() - edit.start.value();
+    // The byte budget: an edit past it is refused whole, before anything is
+    // recorded, so it leaves neither text nor history behind.
+    if (current_size - removed + edit.replacement.size() > query_byte_budget) {
+        edit.verdict = gf::TextEditVerdict::refuse;
+        return;
+    }
     PendingEdit next{};
     next.before = snapshot();
     next.start = edit.start.value();
@@ -316,7 +423,17 @@ void QueryField::editor_text_changed(const std::string &value) {
         ++suffix;
     synchronize(before, value, prefix, old_text.size() - prefix - suffix, value.size() - prefix - suffix);
 }
-void QueryField::editor_selection_changed(const gf::TextSelection &) { invalidate(gf::Dirty::paint); }
+void QueryField::editor_selection_changed(const gf::TextSelection &) {
+    update_scroll();
+    invalidate(gf::Dirty::paint);
+}
+// The editor asks for a layout when its text or its size changed. While the
+// editor's text runs ahead of this control's (its text_changed has not been
+// handled yet), publish_layout waits; synchronize publishes it.
+void QueryField::editor_layout_requested(std::uint64_t) {
+    layout_submitted_ = false;
+    publish_layout();
+}
 void QueryField::editor_focus_changed(bool focused) {
     focused_ = focused;
     invalidate(gf::Dirty::paint);
