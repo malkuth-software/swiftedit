@@ -283,14 +283,11 @@ if(NOTEPAD_BUILD_UI)
   add_executable(swiftedit-idle-probe tests/idle_probe.cpp)
   target_link_libraries(swiftedit-idle-probe PRIVATE notepad_ui)
   if(APPLE)
-    # The Mac host loads fonts from NSBundle, not GUI_FORMS_FONT_DIR. Native
-    # fixtures must use the same resource topology as the packaged application.
+    # Native fixtures run as bundles, as the packaged application does. The
+    # faces come from GUI.Forms' embedded font pack (font pack stage 4), so a
+    # bundle carries no face files.
     foreach(native_target IN ITEMS notepad-native-tests swiftedit-csv-native-tests swiftedit-markdown-native-tests swiftedit-window-native-tests swiftedit-idle-probe)
       set_target_properties(${native_target} PROPERTIES MACOSX_BUNDLE TRUE)
-      add_custom_command(TARGET ${native_target} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${GUIForms_FONT_DIR}"
-          "$<TARGET_BUNDLE_DIR:${native_target}>/Contents/Resources/fonts"
-        VERBATIM)
     endforeach()
   endif()
   # Opt-in because this creates self-closing owned native dialogs.
@@ -329,15 +326,23 @@ if(NOTEPAD_BUILD_UI)
         "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks/$<TARGET_FILE_NAME:GUIForms::Application>"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GUIForms::Application>"
         "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks/$<TARGET_SONAME_FILE_NAME:GUIForms::Application>"
+      # STXlib's shared state (one allocator, identity issuer and SIMD level
+      # per process), which GUI.Forms' libraries carry in their link interface.
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:stxlib::state>"
+        "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks"
       COMMAND ${CMAKE_COMMAND} -E copy_directory "${GUIForms_FONT_DIR}"
-        "$<TARGET_BUNDLE_DIR:notepad>/Contents/Resources/fonts"
+        "$<TARGET_BUNDLE_DIR:notepad>/Contents/Resources/licenses/fonts"
       VERBATIM)
   else()
     add_custom_command(TARGET notepad POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GUIForms::Application>" "$<TARGET_FILE_DIR:notepad>"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${GUIForms_FONT_DIR}" "$<TARGET_FILE_DIR:notepad>/fonts")
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:stxlib::state>" "$<TARGET_FILE_DIR:notepad>")
   endif()
   install(TARGETS notepad BUNDLE DESTINATION . RUNTIME DESTINATION .)
+  # GUIForms_FONT_DIR holds the bundled faces' licences and attribution only:
+  # the faces are compiled into GUI.Forms (font pack stage 4), and the program
+  # carries their licences.
+  install(DIRECTORY "${GUIForms_FONT_DIR}/" DESTINATION licenses/fonts)
   install(FILES third_party/unicode/LICENSE.txt DESTINATION licenses RENAME Unicode.txt)
   install(FILES third_party/md4c/LICENSE.md DESTINATION licenses RENAME MD4C.md)
 endif()

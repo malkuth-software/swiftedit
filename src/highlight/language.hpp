@@ -52,7 +52,8 @@ public:
 [[nodiscard]] const Language &language_named(std::string_view name) noexcept;
 // The language a file name selects by its extension, compared without regard
 // to ASCII case (".CSS" is CSS): .css and .theme.css select the theme sheet,
-// .form the form document, everything else plain text. `file_name` is UTF-8.
+// .form the form document and .control the composite control document (both
+// XML), everything else plain text. `file_name` is UTF-8.
 [[nodiscard]] const Language &language_for_file_name(std::string_view file_name) noexcept;
 
 } // namespace swiftedit::highlight

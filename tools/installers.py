@@ -171,7 +171,7 @@ def windows(bundle: Path, output: Path, scratch: Path) -> tuple[Path, str]:
     invoke_nsis(installer, installed)
     verify_payload(bundle, installed)
     invoke_nsis(installed / 'Uninstall.exe', installed, True)
-    if (installed / 'SwiftEdit.exe').exists() or (installed / 'fonts').exists():
+    if (installed / 'SwiftEdit.exe').exists() or (installed / 'licenses').exists():
         raise RuntimeError('Uninstaller left application payload behind')
     if sentinel.read_text(encoding='utf-8') != 'preserve this document':
         raise RuntimeError('Installer/uninstaller changed a user document')

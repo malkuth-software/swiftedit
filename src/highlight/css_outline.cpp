@@ -6,7 +6,7 @@ namespace {
 
 enum class Phase : std::uint8_t {
     idle,               // between statements
-    prelude,            // reading a selector, an at-rule prelude or an object header
+    prelude,            // reading a selector or an at-rule prelude
     declaration_name,   // reading a declaration's name
     declaration_value,  // reading a declaration's value
 };
@@ -31,8 +31,7 @@ void CssOutline::build(std::string_view text, const DocumentHighlighter &highlig
     open_.clear();
     const ByteRange everything{ByteOffset{}, ByteOffset{text.size()}};
     highlighter.tokens_in(everything, tokens_);
-    const bool form = highlighter.language().name() == "form";
-    const OutlineRuleKind selector_kind = form ? OutlineRuleKind::object : OutlineRuleKind::style_rule;
+    const OutlineRuleKind selector_kind = OutlineRuleKind::style_rule;
 
     Phase phase = Phase::idle;
     OutlineRuleKind prelude_kind = selector_kind;

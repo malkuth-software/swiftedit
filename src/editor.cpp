@@ -227,7 +227,7 @@ void Editor::initialize_control_tree() {
          {"language",
           "&Language",
           {item("language-plain", "&Plain Text"), item("language-css", "&CSS Theme Sheet"),
-           item("language-form", "&Form Document")}},
+           item("language-form", "&Form Document (XML)"), item("language-control", "Composite C&ontrol (XML)")}},
          {"view",
           "&View",
           {item("status", "&Status Bar"), item("csv-view", "CSV &Table View"),

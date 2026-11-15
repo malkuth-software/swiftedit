@@ -226,7 +226,7 @@ def main() -> None:
     (output / 'README.txt').write_text(
         'SwiftEdit development build for Apple silicon\n\n'
         'Extract the ZIP, then open SwiftEdit.app. The app includes its required private '
-        'libraries, fonts and license notices. This build is ad-hoc signed, not notarized.\n'
+        'libraries and license notices. This build is ad-hoc signed, not notarized.\n'
         'Built and tested on Apple-silicon macOS 15 with the GUI.Forms macOS 14 runtime contract. Intel Macs are not supported.\n\n'
         'Interactive terminal: run ./SwiftEdit.app/Contents/MacOS/SwiftEdit-terminal [file] '
         'from Terminal. Use --help for shortcuts. The terminal clipboard is private; '

@@ -108,7 +108,6 @@ def main() -> None:
             raise RuntimeError('The lockstep packages differ from the dependency lock; run prepare_dependencies.py')
         gui = Path(manifest['gui_forms_prefix'])
         toolchain = Path(manifest['toolchain_file'])
-        os.environ['GUI_FORMS_FONT_DIR'] = manifest['font_dir']
         os.environ['CCACHE_DIR'] = manifest['ccache_dir']
         if manifest['llvm_runtime']:
             os.environ['GUI_FORMS_LLVM_RUNTIME'] = manifest['llvm_runtime']
@@ -121,7 +120,6 @@ def main() -> None:
             raise RuntimeError('Installed packages differ from the dependency lock')
         gui = sdk / 'gui-forms-sdk'
         toolchain = Path('gui_forms/cmake/llvm22.cmake').resolve()
-        os.environ['GUI_FORMS_FONT_DIR'] = str(gui / 'share/GUIForms/fonts')
         os.environ['CCACHE_DIR'] = str(Path('.ccache').resolve())
         if arguments.platform == 'macos-arm64':
             os.environ['GUI_FORMS_LLVM_RUNTIME'] = str(Path('.build/toolchain/llvm-22.1.8-macos14').resolve())

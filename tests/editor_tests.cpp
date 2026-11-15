@@ -242,7 +242,7 @@ void verify_language_menu() {
             languages.push_back(item.command);
         }
     }
-    check(languages.size() == 3U, "Plain, CSS and Form languages");
+    check(languages.size() == 4U, "Plain, CSS, Form and Control languages");
     (*(*editor).text_control()).text = "a { b: c; }";
     check((*editor).code_document().language().name() == "plain" && (*languages[0]).state().checked &&
               !(*languages[1]).state().checked,
@@ -259,6 +259,11 @@ void verify_language_menu() {
     (*editor).execute("language-form");
     check((*languages[2]).state().checked && (*editor).code_document().language().name() == "form",
           "Choosing Form checks it");
+    check((*editor).code_document().outline().rules().empty(), "A form document (XML) has no CSS outline");
+    (*editor).execute("language-control");
+    check((*languages[3]).state().checked && !(*languages[2]).state().checked &&
+              (*editor).code_document().language().name() == "control",
+          "Choosing Control checks it alone");
     bool refused = false;
     try {
         static_cast<void>((*editor).application_windows(std::unique_ptr<gf::Window>{}, std::filesystem::path{}));

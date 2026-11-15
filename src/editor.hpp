@@ -38,7 +38,7 @@ class Editor final : public gf::Control {
 public:
     // The file dialogs' filter, in Windows Forms' "label|patterns" form.
     static constexpr std::string_view file_dialog_filter =
-        "All files|*.*|Text documents|*.txt;*.log;*.ini;*.cfg;*.md|Theme sheets and forms|*.css;*.form";
+        "All files|*.*|Text documents|*.txt;*.log;*.ini;*.cfg;*.md|Theme sheets, forms and controls|*.css;*.form;*.control";
     explicit Editor(gf::StableId id, std::function<void()> new_window = {});
     ~Editor() override;
     static constexpr bool initialize_tree_after_construction = true;

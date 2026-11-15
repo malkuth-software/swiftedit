@@ -2,6 +2,7 @@
 // three dialects, and incremental re-lexing (every edit must leave exactly the
 // tokens and line states a full lex of the new text gives).
 #include "highlight/css_language.hpp"
+#include "highlight/xml_language.hpp"
 #include "highlight/highlighter.hpp"
 #include <array>
 #include <cstdint>
@@ -60,13 +61,15 @@ void registry_tests() {
           "A .css file name selects the theme sheet language regardless of case");
     check(hl::language_for_file_name("settings.form").name() == "form",
           "A .form file name selects the form document language");
+    check(hl::language_for_file_name("toggle-pill.CONTROL").name() == "control",
+          "A .control file name selects the composite control language");
     check(hl::language_for_file_name("notes.txt").name() == "plain" &&
               hl::language_for_file_name("").name() == "plain",
           "Other file names select plain text");
     check(hl::language_named("css-inline").name() == "css-inline" &&
               hl::language_named("cobol").name() == "plain",
           "Languages are found by name, with plain text as the fallback");
-    check(hl::registered_languages().size() == 4U &&
+    check(hl::registered_languages().size() == 5U &&
               (*hl::registered_languages()[0]).name() == "plain",
           "The registry lists plain text first");
     expect_tokens(hl::language_named("plain"), "a { b: c; }", "", "Plain text has no tokens");
@@ -133,23 +136,41 @@ void theme_sheet_tests() {
 }
 
 void form_document_tests() {
-    const hl::Language &form = hl::css_form_document_language();
+    const hl::Language &form = hl::xml_form_document_language();
     const std::string_view document =
-        "form example.window {\n"
-        "  text: \"GUI.Forms example\";\n"
-        "  client-size: 420 360;\n"
-        "  panel example.root {\n"
-        "    check-box example.shout { checked: bind(shout, one_way); classes: \"wide\"; }\n"
-        "  }\n"
-        "}\n";
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<!-- example.form -->\n"
+        "<form xmlns=\"urn:gui-forms:form:1\" id=\"example.window\"\n"
+        "    text=\"GUI.Forms &amp; you\"\n"
+        "    client-size=\"420 360\">\n"
+        "  <panel id=\"example.root\">\n"
+        "    <check-box id='example.shout' checked=\"bind(shout, one_way)\" classes=\"wide\"/>\n"
+        "  </panel>\n"
+        "</form>\n";
     expect_tokens(form, document,
-                  "type:form id:example.window punct:{ property:text punct:: "
-                  "string:\"GUI.Forms example\" punct:; property:client-size punct:: number:420 "
-                  "number:360 punct:; type:panel id:example.root punct:{ type:check-box "
-                  "id:example.shout punct:{ property:checked punct:: function:bind punct:( "
-                  "ident:shout punct:, keyword:one_way punct:) punct:; property:classes punct:: "
-                  "string:\"wide\" punct:; punct:} punct:} punct:}",
-                  "Form objects are a type and a dotted stable ID; bindings are functions");
+                  "punct:< at:?xml property:version punct:= string:\"1.0\" property:encoding punct:= "
+                  "string:\"UTF-8\" punct:?> comment:<!-- example.form --> punct:< type:form "
+                  "property:xmlns punct:= string:\"urn:gui-forms:form:1\" property:id punct:= "
+                  "id:\"example.window\" property:text punct:= string:\"GUI.Forms &amp; you\" "
+                  "property:client-size punct:= string:\"420 360\" punct:> punct:< type:panel property:id "
+                  "punct:= id:\"example.root\" punct:> punct:< type:check-box property:id punct:= "
+                  "id:'example.shout' property:checked punct:= string:\"bind(shout, one_way)\" "
+                  "property:classes punct:= string:\"wide\" punct:/> punct:</ type:panel punct:> "
+                  "punct:</ type:form punct:>",
+                  "Form objects are elements; an id attribute's value is the stable ID");
+    // A comment and a value that span lines carry their state to the next line.
+    expect_tokens(form, "<!-- one\ntwo -->\n<label id=\"a\" text=\"line\nnext\"/>",
+                  "comment:<!-- one comment:two --> punct:< type:label property:id punct:= id:\"a\" "
+                  "property:text punct:= string:\"line string:next\" punct:/>",
+                  "Comments and quoted values continue across lines");
+    expect_tokens(form, "<a b=c/> & <", "punct:< type:a property:b punct:= invalid:c punct:/> invalid:& invalid:<",
+                  "An unquoted value, a lone ampersand and a lone angle bracket are invalid");
+    const hl::Language &control = hl::xml_control_document_language();
+    expect_tokens(control, "<control name=\"toggle-pill\"><description>On &#38; off</description></control>",
+                  "punct:< type:control property:name punct:= string:\"toggle-pill\" punct:> punct:< "
+                  "type:description punct:> ident:&#38; punct:</ type:description punct:> punct:</ "
+                  "type:control punct:>",
+                  "A control document's text is plain, with its references marked");
 }
 
 void inline_style_tests() {
@@ -195,7 +216,7 @@ void incremental_tests() {
         "/*", "*/", "{", "}", "\n", "\r", "\r\n", "\"", "\\", "a: b;", "@media x {", " ",
         "#fff", "button"};
     const std::array<const hl::Language *, 3U> languages{&hl::css_theme_sheet_language(),
-                                                         &hl::css_form_document_language(),
+                                                         &hl::xml_form_document_language(),
                                                          &hl::css_inline_style_language()};
     for (const hl::Language *language : languages) {
         Generator generator{};

@@ -181,14 +181,6 @@ void outline_tests() {
               markers[1].kind == hl::DecorationKind::diagnostic_warning && markers[1].tag == 1U,
           "A position past the line marks the line's last byte");
 
-    const std::string form = "form a.window {\n  panel a.root {\n    label a.l { text: \"x\"; }\n  }\n}\n";
-    hl::DocumentHighlighter form_highlighter(hl::css_form_document_language());
-    form_highlighter.reset(form);
-    outline.build(form, form_highlighter);
-    check(outline.rules().size() == 3U && outline.rules()[2].kind == hl::OutlineRuleKind::object &&
-              outline.rules()[2].parent == 1U && outline.declarations().size() == 1U,
-          "Form objects nest");
-
     const std::string unclosed = "a { b: c";
     highlighter.reset(unclosed);
     outline.build(unclosed, highlighter);

@@ -1,5 +1,6 @@
 #include "language.hpp"
 #include "css_language.hpp"
+#include "xml_language.hpp"
 #include <array>
 
 namespace swiftedit::highlight {
@@ -33,9 +34,9 @@ LexState PlainLanguage::lex_line(std::string_view, LexState entry, std::vector<L
 std::span<const Language *const> registered_languages() noexcept {
     // Built on first use from the languages' own static objects, so the order
     // of static initialization across files never matters.
-    static const std::array<const Language *, 4U> languages{
-        &plain_language(), &css_theme_sheet_language(), &css_form_document_language(),
-        &css_inline_style_language()};
+    static const std::array<const Language *, 5U> languages{
+        &plain_language(), &css_theme_sheet_language(), &xml_form_document_language(),
+        &xml_control_document_language(), &css_inline_style_language()};
     const std::span<const Language *const> result(languages.data(), languages.size());
     return result;
 }
@@ -52,7 +53,9 @@ const Language &language_for_file_name(std::string_view file_name) noexcept {
     if (ends_with_ignoring_ascii_case(file_name, ".css"))
         return css_theme_sheet_language();
     if (ends_with_ignoring_ascii_case(file_name, ".form"))
-        return css_form_document_language();
+        return xml_form_document_language();
+    if (ends_with_ignoring_ascii_case(file_name, ".control"))
+        return xml_control_document_language();
     return plain_language();
 }
 

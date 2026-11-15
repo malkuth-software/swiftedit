@@ -36,19 +36,19 @@ constexpr std::string_view sample_sheet =
     "label { font-family: \"Portsmouth Rapids\"; colr: red; }\n";
 
 constexpr std::string_view sample_form =
-    "/* A form document: types, stable IDs and properties. */\n"
-    "form settings.window {\n"
-    "  text: \"Settings\";\n"
-    "  client-size: 480 320;\n"
-    "\n"
-    "  check-box settings.wrap { text: \"&Word wrap\"; checked: true; bounds: 16 16 200 24; }\n"
-    "  button settings.ok { text: \"OK\"; bounds: 300 270 80 28; }\n"
-    "}\n";
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    "<!-- A form document: types, stable IDs and properties. -->\n"
+    "<form xmlns=\"urn:gui-forms:form:1\" id=\"settings.window\"\n"
+    "    text=\"Settings\"\n"
+    "    client-size=\"480 320\">\n"
+    "  <check-box id=\"settings.wrap\" text=\"&amp;Word wrap\" checked=\"true\" bounds=\"16 16 200 24\"/>\n"
+    "  <button id=\"settings.ok\" text=\"OK\" bounds=\"300 270 80 28\"/>\n"
+    "</form>\n";
 
 constexpr std::string_view sample_text =
     "SwiftEdit opens plain text without decoration.\n"
     "\n"
-    "Syntax colours appear for theme sheets (.css) and form documents (.form);\n"
+    "Syntax colours appear for theme sheets (.css), form documents (.form) and controls (.control);\n"
     "this file is plain, so it is drawn in one style.\n";
 
 void write_sample(const std::filesystem::path &file, std::string_view text) {

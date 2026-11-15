@@ -4,6 +4,9 @@
 #include "swiftedit_theme.hpp"     // generated from themes/swiftedit
 #include <iostream>
 #include <string>
+#ifdef __linux__
+#include <clocale>
+#endif
 #include <string_view>
 #ifdef _WIN32
 #include <windows.h>
@@ -31,6 +34,15 @@ struct NativeArguments {
 #endif
 
 int main(int argc, char **argv) {
+#ifdef __linux__
+    // The process locale is the program's: GUI.Forms' Linux host no longer
+    // sets it (D15), and its X input method follows LC_CTYPE, so the
+    // environment's input methods (ibus, fcitx) and compose sequences need the
+    // environment's character type. Only LC_CTYPE: number and date text stays
+    // locale-independent.
+    // std-rules: allow(locale-change) the program, not the library, chooses its locale
+    std::setlocale(LC_CTYPE, "");
+#endif
     try {
         std::filesystem::path initial{};
         // --screenshots <dir>: the screenshot run (src/screenshots.cpp).

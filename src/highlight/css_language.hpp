@@ -1,8 +1,8 @@
 #pragma once
 // The CSS family as GUI.Forms writes it: theme sheets (selectors, at-rules,
-// declarations, roles and engine functions), form documents (nested objects
-// written as `type stable.id { property: value; }`) and inline styles
-// (declarations and nested part rules with no enclosing selector).
+// declarations, roles and engine functions) and inline styles (declarations
+// and nested part rules with no enclosing selector). Form documents are XML
+// since GUI.Forms cp34 (xml_language.hpp).
 //
 // The lexer is line-at-a-time. Its state carries what crosses a line: an open
 // comment, a string continued by a backslash, the brace depth, whether each
@@ -18,7 +18,6 @@ namespace swiftedit::highlight {
 
 enum class CssDialect : std::uint8_t {
     theme_sheet,    // a .css or .theme.css file: rules at the top level
-    form_document,  // a .form file: one object at the top level, objects nested
     inline_style,   // Control::set_inline_style text: declarations at the top level
 };
 
@@ -40,9 +39,8 @@ private:
     CssDialect dialect_{CssDialect::theme_sheet};
 };
 
-// The three dialects, with static storage duration (the registry's entries).
+// The two dialects, with static storage duration (the registry's entries).
 [[nodiscard]] const CssLanguage &css_theme_sheet_language() noexcept;
-[[nodiscard]] const CssLanguage &css_form_document_language() noexcept;
 [[nodiscard]] const CssLanguage &css_inline_style_language() noexcept;
 
 } // namespace swiftedit::highlight

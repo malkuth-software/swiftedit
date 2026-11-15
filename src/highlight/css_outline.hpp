@@ -1,6 +1,6 @@
 #pragma once
 // The rule structure of a CSS-family document, read from its tokens: each
-// rule's prelude (selector, at-rule or form object header) and block, its
+// rule's prelude (selector or at-rule) and block, its
 // nesting, and each declaration's name and value.
 //
 // The theme editor uses it to turn what the theme compiler reports (a rule
@@ -20,7 +20,6 @@ namespace swiftedit::highlight {
 enum class OutlineRuleKind : std::uint8_t {
     style_rule,  // selector { declarations }
     at_rule,     // @media ... { rules }, @theme { ... }, or @import "x";
-    object,      // a form document's `type stable.id { ... }`
 };
 
 inline constexpr std::uint32_t no_outline_parent = UINT32_MAX;

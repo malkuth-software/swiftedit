@@ -143,11 +143,12 @@ def main() -> None:
         for name in ['SwiftEdit', 'swiftedit-terminal', 'swiftedit-cli']:
             launcher: Path = root / name
             launcher.write_text('#!/bin/sh\nroot=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
-                                'export GUI_FORMS_FONT_DIR="$root/fonts"\n'
                                 'export LD_LIBRARY_PATH="$root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n'
                                 'exec "$root/bin/' + name + '" "$@"\n', encoding='utf-8')
             launcher.chmod(0o755)
-    shutil.copytree(sdk / 'gui-forms-sdk/share/GUIForms/fonts', root / 'fonts')
+    # The SDK's font directory holds the bundled faces' licences only; the
+    # faces are compiled into GUI.Forms (font pack stage 4).
+    shutil.copytree(sdk / 'gui-forms-sdk/share/GUIForms/fonts', root / 'licenses/fonts')
     shutil.copytree('third_party/md4c', root / 'licenses/MD4C', ignore=shutil.ignore_patterns('*.c', '*.h'))
     shutil.copy2('third_party/unicode/LICENSE.txt', root / 'licenses/Unicode.txt')
     component: str

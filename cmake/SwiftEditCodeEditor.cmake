@@ -19,6 +19,7 @@ set(SWIFTEDIT_SOURCE_ROOT "${CMAKE_CURRENT_LIST_DIR}/..")
 add_library(swiftedit_highlight STATIC
   "${SWIFTEDIT_SOURCE_ROOT}/src/highlight/language.cpp"
   "${SWIFTEDIT_SOURCE_ROOT}/src/highlight/css_language.cpp"
+  "${SWIFTEDIT_SOURCE_ROOT}/src/highlight/xml_language.cpp"
   "${SWIFTEDIT_SOURCE_ROOT}/src/highlight/highlighter.cpp"
   "${SWIFTEDIT_SOURCE_ROOT}/src/highlight/decorations.cpp"
   "${SWIFTEDIT_SOURCE_ROOT}/src/highlight/css_outline.cpp"

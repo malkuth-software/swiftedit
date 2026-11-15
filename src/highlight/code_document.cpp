@@ -31,7 +31,7 @@ bool equal_at(std::string_view text, std::size_t at, std::string_view needle, bo
 
 bool css_family(const Language &language) noexcept {
     const std::string_view name = language.name();
-    const bool result = name == "css" || name == "form" || name == "css-inline";
+    const bool result = name == "css" || name == "css-inline";
     return result;
 }
 

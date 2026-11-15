@@ -28,7 +28,6 @@
         "CCACHE_DIR": "${sourceDir}/.ccache",
         "CCACHE_BASEDIR": "${sourceDir}",
         "CCACHE_COMPILERCHECK": "content",
-        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk/share/GUIForms/fonts",
         "PATH": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk/bin;$penv{PATH}"
       }
     },
@@ -53,8 +52,7 @@
       "environment": {
         "CCACHE_DIR": "${sourceDir}/.ccache",
         "CCACHE_BASEDIR": "${sourceDir}",
-        "CCACHE_COMPILERCHECK": "content",
-        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-linux-x64/sdk/gui-forms-sdk/share/GUIForms/fonts"
+        "CCACHE_COMPILERCHECK": "content"
       }
     },
     {
@@ -78,8 +76,7 @@
       "environment": {
         "CCACHE_DIR": "${sourceDir}/.ccache",
         "CCACHE_BASEDIR": "${sourceDir}",
-        "CCACHE_COMPILERCHECK": "content",
-        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-linux-arm64/sdk/gui-forms-sdk/share/GUIForms/fonts"
+        "CCACHE_COMPILERCHECK": "content"
       }
     },
     {
@@ -104,7 +101,6 @@
         "CCACHE_DIR": "${sourceDir}/.ccache",
         "CCACHE_BASEDIR": "${sourceDir}",
         "CCACHE_COMPILERCHECK": "content",
-        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-macos-arm64/sdk/gui-forms-sdk/share/GUIForms/fonts",
         "GUI_FORMS_LLVM_RUNTIME": "${sourceDir}/.build/toolchain/llvm-22.1.8-macos14"
       }
     }

@@ -8,7 +8,7 @@ namespace {
 
 enum class Context : std::uint8_t {
     statement_start = 0U,  // nothing of the current statement read yet
-    selector = 1U,         // a rule's selector, or a form object's header
+    selector = 1U,         // a rule's selector
     at_prelude = 2U,       // after an at-keyword, before its block or `;`
     property = 3U,         // a declaration's name, before its colon
     value = 4U,            // a declaration's value, before `;` or `}`
@@ -23,7 +23,7 @@ enum class Quote : std::uint8_t { none = 0U, double_quote = 1U, single_quote = 2
 //   10-11 inside a string continued by a backslash, and its quote
 //   12-15 parenthesis depth (saturating at 15)
 //   16    the at-rule being read opens a block of rules (@media, @keyframes)
-//   17    a form object's header has its type; the next name is its stable ID
+//   17    unused (the retired CSS form document's header flag)
 //   18    the selector parentheses being read hold names (::part(face))
 //   32-63 bit d set: the block at depth d + 1 holds rules, not declarations
 struct CssState final {
@@ -33,7 +33,6 @@ struct CssState final {
     Quote quote{Quote::none};
     std::uint32_t parentheses{};
     bool at_block_holds_rules{};
-    bool header_named{};
     bool argument_names{};
     std::uint32_t rule_blocks{};
 };
@@ -50,7 +49,6 @@ CssState decode(LexState state) noexcept {
     result.quote = static_cast<Quote>((bits >> 10U) & 0x3U);
     result.parentheses = static_cast<std::uint32_t>((bits >> 12U) & 0xFU);
     result.at_block_holds_rules = ((bits >> 16U) & 0x1U) != 0U;
-    result.header_named = ((bits >> 17U) & 0x1U) != 0U;
     result.argument_names = ((bits >> 18U) & 0x1U) != 0U;
     result.rule_blocks = static_cast<std::uint32_t>(bits >> 32U);
     return result;
@@ -63,7 +61,6 @@ LexState encode(const CssState &state) noexcept {
     bits |= static_cast<std::uint64_t>(static_cast<std::uint8_t>(state.quote) & 0x3U) << 10U;
     bits |= static_cast<std::uint64_t>(state.parentheses & 0xFU) << 12U;
     bits |= static_cast<std::uint64_t>(state.at_block_holds_rules ? 1U : 0U) << 16U;
-    bits |= static_cast<std::uint64_t>(state.header_named ? 1U : 0U) << 17U;
     bits |= static_cast<std::uint64_t>(state.argument_names ? 1U : 0U) << 18U;
     bits |= static_cast<std::uint64_t>(state.rule_blocks) << 32U;
     const LexState result{bits};
@@ -117,7 +114,7 @@ bool equal_ignoring_ascii_case(std::string_view left, std::string_view right) no
 }
 
 // Value words that read as keywords rather than as plain identifiers: the
-// role pair's `on`, CSS's global words, and the form binding options.
+// role pair's `on`, CSS's global words, and the binding options.
 constexpr std::array<std::string_view, 14U> value_keywords{
     "on",    "none",   "inherit", "initial", "unset",  "auto",     "transparent",
     "true",  "false",  "normal",  "one_way", "two_way", "update", "on-change"};
@@ -221,9 +218,8 @@ private:
     }
 
     // The end of the name starting at `start`; escapes take the byte after
-    // the backslash. With `dotted`, dots continue the name (a form document's
-    // stable IDs, as example.greeting).
-    std::size_t name_end(std::size_t start, bool dotted) const noexcept {
+    // the backslash.
+    std::size_t name_end(std::size_t start) const noexcept {
         std::size_t position = start;
         while (position < line_.size()) {
             const char character = line_[position];
@@ -231,8 +227,7 @@ private:
                 position = std::min(position + 2U, line_.size());
                 continue;
             }
-            const bool continues = is_name_character(character) || (dotted && character == '.');
-            if (!continues)
+            if (!is_name_character(character))
                 break;
             ++position;
         }
@@ -377,7 +372,7 @@ private:
 
     void begin_statement() {
         if (line_[index_] == '@') {
-            const std::size_t end = name_end(index_ + 1U, false);
+            const std::size_t end = name_end(index_ + 1U);
             emit(index_, end, TokenKind::at_rule);
             const std::string_view keyword = line_.substr(index_ + 1U, end - index_ - 1U);
             state_.at_block_holds_rules = listed_ignoring_case(rule_list_at_rules, keyword);
@@ -388,14 +383,12 @@ private:
         const bool rules = block_holds_rules(state_.depth);
         const bool nested = !rules && brace_before_statement_end();
         state_.context = rules || nested ? Context::selector : Context::property;
-        state_.header_named = false;
     }
 
     void end_statement() noexcept {
         state_.context = Context::statement_start;
         state_.parentheses = 0U;
         state_.at_block_holds_rules = false;
-        state_.header_named = false;
         state_.argument_names = false;
     }
 
@@ -455,29 +448,28 @@ private:
         if (position < line_.size() && line_[position] == '%')
             return position + 1U;
         if (identifier_starts_at(position))
-            return name_end(position + 1U, false);
+            return name_end(position + 1U);
         return position;
     }
 
     void selector_token() {
         const char character = line_[index_];
-        const bool form = dialect_ == CssDialect::form_document;
         if (character == '#') {
-            const std::size_t end = name_end(index_ + 1U, form);
+            const std::size_t end = name_end(index_ + 1U);
             const TokenKind kind = end > index_ + 1U ? TokenKind::identity_selector : TokenKind::invalid;
             emit(index_, std::max(end, index_ + 1U), kind);
             index_ = std::max(end, index_ + 1U);
             return;
         }
         if (character == '.' && is_name_start(peek(1U))) {
-            const std::size_t end = name_end(index_ + 1U, false);
+            const std::size_t end = name_end(index_ + 1U);
             emit(index_, end, TokenKind::class_selector);
             index_ = end;
             return;
         }
         if (character == ':') {
             const std::size_t name_start = peek(1U) == ':' ? index_ + 2U : index_ + 1U;
-            const std::size_t end = name_end(name_start, false);
+            const std::size_t end = name_end(name_start);
             emit(index_, end, end > name_start ? TokenKind::pseudo_selector : TokenKind::invalid);
             const std::string_view name = line_.substr(name_start, end - name_start);
             index_ = std::max(end, name_start);
@@ -513,21 +505,14 @@ private:
         }
         if (identifier_starts_at(index_)) {
             if (state_.parentheses > 0U && state_.argument_names) {
-                const std::size_t end = name_end(index_ + 1U, false);
+                const std::size_t end = name_end(index_ + 1U);
                 emit(index_, end, TokenKind::value_identifier);
                 index_ = end;
                 return;
             }
-            if (form && state_.header_named) {
-                const std::size_t end = name_end(index_ + 1U, true);
-                emit(index_, end, TokenKind::identity_selector);
-                index_ = end;
-                return;
-            }
-            const std::size_t end = name_end(index_ + 1U, false);
+            const std::size_t end = name_end(index_ + 1U);
             emit(index_, end, TokenKind::type_selector);
             index_ = end;
-            state_.header_named = form;
             return;
         }
         emit(index_, index_ + 1U, TokenKind::invalid);
@@ -543,7 +528,7 @@ private:
             return;
         }
         if (identifier_starts_at(index_)) {
-            const std::size_t end = name_end(index_ + 1U, false);
+            const std::size_t end = name_end(index_ + 1U);
             const bool custom = character == '-' && peek(1U) == '-';
             emit(index_, end, custom ? TokenKind::custom_property : TokenKind::property);
             index_ = end;
@@ -573,7 +558,7 @@ private:
             if (sized && closed) {
                 emit(index_, end, TokenKind::color);
             } else {
-                end = std::max(name_end(index_ + 1U, false), index_ + 1U);
+                end = std::max(name_end(index_ + 1U), index_ + 1U);
                 emit(index_, end, TokenKind::invalid);
             }
             index_ = end;
@@ -589,7 +574,7 @@ private:
             std::size_t word = index_ + 1U;
             while (word < line_.size() && is_space(line_[word]))
                 ++word;
-            const std::size_t end = name_end(word, false);
+            const std::size_t end = name_end(word);
             const bool important =
                 equal_ignoring_ascii_case(line_.substr(word, end - word), "important");
             emit(index_, important ? end : index_ + 1U,
@@ -598,7 +583,7 @@ private:
             return;
         }
         if (identifier_starts_at(index_)) {
-            const std::size_t end = name_end(index_ + 1U, false);
+            const std::size_t end = name_end(index_ + 1U);
             const std::string_view word = line_.substr(index_, end - index_);
             if (end < line_.size() && line_[end] == '(') {
                 emit(index_, end, TokenKind::function);
@@ -653,8 +638,6 @@ std::string_view CssLanguage::name() const noexcept {
     switch (dialect_) {
     case CssDialect::theme_sheet:
         return "css";
-    case CssDialect::form_document:
-        return "form";
     case CssDialect::inline_style:
         return "css-inline";
     }
@@ -665,8 +648,6 @@ std::string_view CssLanguage::display_name() const noexcept {
     switch (dialect_) {
     case CssDialect::theme_sheet:
         return "CSS (theme sheet)";
-    case CssDialect::form_document:
-        return "Form document";
     case CssDialect::inline_style:
         return "CSS (inline style)";
     }
@@ -689,11 +670,6 @@ LexState CssLanguage::lex_line(std::string_view line, LexState entry,
 
 const CssLanguage &css_theme_sheet_language() noexcept {
     static const CssLanguage language(CssDialect::theme_sheet);
-    return language;
-}
-
-const CssLanguage &css_form_document_language() noexcept {
-    static const CssLanguage language(CssDialect::form_document);
     return language;
 }
 
