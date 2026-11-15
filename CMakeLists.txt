@@ -319,6 +319,9 @@ if(NOTEPAD_BUILD_UI)
   if(MSVC)
     target_link_options(notepad PRIVATE /ENTRY:mainCRTStartup)
   endif()
+  # The copies of GUI.Forms' shared library wait on GUI.Forms' one-module
+  # change (every delivered program is one module, GUI.Forms and libc++
+  # linked statically into the executable); they go when it lands.
   if(APPLE)
     add_custom_command(TARGET notepad POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks"
@@ -326,17 +329,12 @@ if(NOTEPAD_BUILD_UI)
         "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks/$<TARGET_FILE_NAME:GUIForms::Application>"
       COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GUIForms::Application>"
         "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks/$<TARGET_SONAME_FILE_NAME:GUIForms::Application>"
-      # STXlib's shared state (one allocator, identity issuer and SIMD level
-      # per process), which GUI.Forms' libraries carry in their link interface.
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:stxlib::state>"
-        "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks"
       COMMAND ${CMAKE_COMMAND} -E copy_directory "${GUIForms_FONT_DIR}"
         "$<TARGET_BUNDLE_DIR:notepad>/Contents/Resources/licenses/fonts"
       VERBATIM)
   else()
     add_custom_command(TARGET notepad POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GUIForms::Application>" "$<TARGET_FILE_DIR:notepad>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:stxlib::state>" "$<TARGET_FILE_DIR:notepad>")
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GUIForms::Application>" "$<TARGET_FILE_DIR:notepad>")
   endif()
   install(TARGETS notepad BUNDLE DESTINATION . RUNTIME DESTINATION .)
   # GUIForms_FONT_DIR holds the bundled faces' licences and attribution only:
