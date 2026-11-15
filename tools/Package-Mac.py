@@ -187,9 +187,13 @@ def main() -> None:
     verify_load_paths(executable, executable, app)
     verify_load_paths(terminal, terminal, app)
     verify_load_paths(cli, cli, app)
+    # One module: GUI.Forms is linked into the executables, so Frameworks
+    # holds only what fixup_bundle found (a shared libc++ runtime, when the
+    # runtime tree has no archives), and may be absent.
     frameworks: Path = app / 'Contents/Frameworks'
+    libraries: list[Path] = sorted(frameworks.iterdir()) if frameworks.is_dir() else []
     library: Path
-    for library in frameworks.iterdir():
+    for library in libraries:
         if library.is_file() and not library.is_symlink():
             verify_load_paths(library, executable, app)
             run(['codesign', '--force', '--sign', '-', str(library)])

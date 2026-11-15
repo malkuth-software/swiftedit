@@ -62,9 +62,10 @@ its prep branch is built against this one (`-DSWIFTEDIT_SOURCE_DIR`).
    - **Font pack stage 4:** the faces are compiled into GUI.Forms and `GUIForms_FONT_DIR` holds their licences only.
      Bundles and packages carry them in `licenses/fonts`; the native fixtures copy no faces; the launchers,
      presets and Build-Native stop setting `GUI_FORMS_FONT_DIR`.
-   - **STXlib's shared state:** no copy. Every delivered program is one module, with no native library beside it
-     (owner decision; GUI.Forms `claude/one-module`, being written). The build-tree copies of GUI.Forms' shared
-     library are marked to go when one-module lands.
+   - **One module** (GUI.Forms 66f82629b, folded): GUI.Forms, its threading library and STXlib's state link
+     statically into the executable. The build-tree copies of GUI.Forms' library (Frameworks on macOS, beside the
+     executable elsewhere) are gone; `tools/Package-Mac.py` accepts a bundle with no Frameworks directory; the
+     Windows and Linux packages follow the dependency closure, which now holds no first-party library.
    - **D15:** `main` sets `LC_CTYPE` from the environment on Linux, with the `std-rules: allow(locale-change)`
      marker.
    - **Static libc++ on Linux** (66556d959) comes through GUI.Forms' `cmake/llvm22.cmake`, which Build-Native
@@ -149,9 +150,6 @@ Left for later: a description naming the flagged positions in the editor's node.
   - the template_harness commit in `harness.lock`.
   - Both move at the conformance rebase. `prepare_dependencies.py` requires `harness.lock` to equal GUI.Forms' own.
 - **Composite gaps A, B and C above**, before QueryField can become a `CompositeControl`.
-- **One module** (GUI.Forms `claude/one-module`): remove the build-tree copies of GUI.Forms' shared library
-  (Frameworks on macOS, beside the executable elsewhere) and link statically; the package closures should then
-  find no GUI.Forms library.
 - **STXlib boundary types** (the swap-in): the `std::string` and `std::vector` crossings of the GUI.Forms API move
   when the owned types land.
 - **Font family:** the bundled body face selection. SwiftEdit's editor and views use the theme's faces.
