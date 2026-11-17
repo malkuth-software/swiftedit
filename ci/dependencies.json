@@ -1,6 +1,6 @@
 {
   "repository": "malkuth-software/gui_forms",
-  "revision": "30ebd0d4d5388f2866d79089334d958787a12432",
-  "pin_note": "The one place the GUI.Forms pin is written. 30ebd0d4d5388f2866d79089334d958787a12432 is replaced with the merged GUI.Forms main commit (#483); harness.lock must then equal gui_forms/harness.lock at that commit. Add a platform's digest under cache_sha256 to import its published compiler cache (release build-<revision>); a platform without one compiles from source. SwiftEdit builds the GUI.Forms SDK with its own tools/build_sdk.py --features all; the stx packages (stx_rtf2md among them) come from stx at GUI.Forms' stx.lock commit and install into the same prefix. Its tools forward to template_harness, which prepare_dependencies.py checks out at template_harness/ at the commit harness.lock pins.",
+  "revision": "2b60b145188abae94edda82fb67f2f1f65fc6601",
+  "pin_note": "The one place the GUI.Forms pin is written. The pin is a GUI.Forms commit on GitHub: the checkpoint under test, then its merged main commit; harness.lock must then equal gui_forms/harness.lock at that commit. Add a platform's digest under cache_sha256 to import its published compiler cache (release build-<revision>); a platform without one compiles from source. SwiftEdit builds the GUI.Forms SDK with its own tools/build_sdk.py --features all; the stx packages (stx_rtf2md among them) come from stx at GUI.Forms' stx.lock commit and install into the same prefix. Its tools forward to template_harness, which prepare_dependencies.py checks out at template_harness/ at the commit harness.lock pins.",
   "cache_sha256": {}
 }
