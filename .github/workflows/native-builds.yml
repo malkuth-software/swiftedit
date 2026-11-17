@@ -146,6 +146,16 @@ jobs:
             python3 template_harness/harness/build_linux_runtimes.py --work "$RUNNER_TEMP/llvm-runtimes" --prefix "$GUI_FORMS_LLVM_RUNTIME" --jobs 4
           fi
           python3 template_harness/harness/linux_runtime_manifest.py "$GUI_FORMS_LLVM_RUNTIME"
+      # No GUI.Forms release publishes the macOS 14 runtime for a checkpoint
+      # commit (only tested main builds publish one): build it with the harness,
+      # as GUI.Forms' own CI does, when the restore above found none.
+      - name: Build the macOS 14 LLVM runtime when none was restored
+        if: runner.os == 'macOS'
+        run: |
+          if [ ! -f "$GUI_FORMS_LLVM_RUNTIME/runtime-manifest.json" ]; then
+            python3 template_harness/harness/build_macos_runtimes.py --work "$RUNNER_TEMP/llvm-runtimes" --prefix "$GUI_FORMS_LLVM_RUNTIME" --jobs 4
+          fi
+          python3 template_harness/harness/macos_runtime_manifest.py "$GUI_FORMS_LLVM_RUNTIME"
       - name: Identify the shared compiler and SDK contract
         id: compiler
         run: python -B gui_forms/tools/compiler_identity.py
