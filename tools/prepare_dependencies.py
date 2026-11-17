@@ -74,6 +74,10 @@ def import_cache(archive: Path, destination: Path, expected: str, repository: st
 
 
 def restore_cache(platform: str, lock: dict) -> None:
+    expected: str | None = lock['cache_sha256'].get(platform)
+    if expected is None:
+        print('No reviewed provider cache digest for ' + platform + '; compiling pinned source.', flush=True)
+        return
     download: Path = ROOT / '.build/cache-import' / lock['revision']
     download.mkdir(parents=True, exist_ok=True)
     archive: Path = download / ('gui-forms-cache-' + platform + '.tar.gz')
@@ -84,7 +88,7 @@ def restore_cache(platform: str, lock: dict) -> None:
         if result.returncode:
             print('Provider cache unavailable; compiling pinned source without imported objects.', flush=True)
             return
-    import_cache(archive, ROOT, lock['cache_sha256'][platform], lock['repository'], lock['revision'], platform)
+    import_cache(archive, ROOT, expected, lock['repository'], lock['revision'], platform)
     print('Verified provider compiler cache imported for ' + platform, flush=True)
 
 

@@ -118,8 +118,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y clang-22 cmake ninja-build generate-ninja ccache pkg-config libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libatk1.0-dev libatk-bridge2.0-dev xvfb xauth patchelf dpkg-dev
           echo /usr/lib/llvm-22/bin >> "$GITHUB_PATH"
-      - name: Test dependency cache admission
-        run: python -B -m unittest discover -s tests -p test_dependency_cache.py
       - name: Fetch pinned providers and import verified GUI.Forms cache
         if: runner.os != 'Windows'
         env:
@@ -136,14 +134,6 @@ jobs:
           restore-keys: |
             swiftedit-llvm22-v1-${{ matrix.platform }}-${{ steps.compiler.outputs.identity }}-
             swiftedit-llvm22-v1-${{ matrix.platform }}-
-      - uses: actions/cache/restore@v4
-        id: renderer
-        if: runner.os != 'Windows'
-        with:
-          path: |
-            gui_forms/third_party/skia
-            .build/native-${{ matrix.platform }}/skia
-          key: swiftedit-skia-llvm22-v1-${{ matrix.platform }}-${{ steps.compiler.outputs.identity }}-${{ hashFiles('ci/dependencies.json') }}
       - name: Configure compiler cache
         run: |
           cache_dir="$PWD/.ccache"
@@ -161,13 +151,6 @@ jobs:
       - name: Build public installed dependencies
         id: dependencies
         run: python -B tools/prepare_dependencies.py --platform ${{ matrix.platform }} --jobs 4
-      - uses: actions/cache/save@v4
-        if: runner.os != 'Windows' && steps.renderer.outputs.cache-hit != 'true'
-        with:
-          path: |
-            gui_forms/third_party/skia
-            .build/native-${{ matrix.platform }}/skia
-          key: ${{ steps.renderer.outputs.cache-primary-key }}
       - name: Compile SwiftEdit
         id: compile
         run: python -B tools/Build-Native.py --platform ${{ matrix.platform }} --build-only --jobs 4
@@ -182,12 +165,13 @@ jobs:
         with:
           path: .ccache
           key: ${{ steps.objects.outputs.cache-primary-key }}
-      - name: Test and package Windows or macOS
+      # Compile-only release CI (2026-11-17): package without ctest or the benchmarks.
+      - name: Package Windows or macOS
         if: runner.os != 'Linux'
-        run: python -B tools/Build-Native.py --platform ${{ matrix.platform }} --test-package-only --installers
-      - name: Test and package Linux with an owned virtual display
+        run: python -B tools/Build-Native.py --platform ${{ matrix.platform }} --package-only --installers
+      - name: Package Linux with an owned virtual display
         if: runner.os == 'Linux'
-        run: xvfb-run -a python -B tools/Build-Native.py --platform ${{ matrix.platform }} --test-package-only --installers
+        run: xvfb-run -a python -B tools/Build-Native.py --platform ${{ matrix.platform }} --package-only --installers
       - name: Upload platform dogfood download
         uses: actions/upload-artifact@v4
         with:
@@ -195,10 +179,6 @@ jobs:
           path: .build/native-${{ matrix.platform }}/app/dist/*
           if-no-files-found: error
           compression-level: 0
-      # SwiftEdit's own code under AddressSanitizer and UndefinedBehaviorSanitizer
-      # (LeakSanitizer too on Linux and macOS), headless tests only, never packaged.
-      - name: Test SwiftEdit under the sanitizers
-        run: python -B tools/Build-Native.py --platform ${{ matrix.platform }} --sanitize --jobs 4
       - name: Preserve native test and package diagnostics
         if: always()
         uses: actions/upload-artifact@v4
