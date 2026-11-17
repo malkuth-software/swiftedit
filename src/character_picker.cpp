@@ -1,6 +1,7 @@
 #include "character_picker.hpp"
 #include <algorithm>
 #include <stdexcept>
+#include <stxlib/optional.hpp>
 
 namespace notepad {
 CharacterPicker::CharacterPicker(gf::StableId id, bool controls)
@@ -17,7 +18,7 @@ void CharacterPicker::initialize_control_tree() {
     list_ = gf::make_control<gf::ListBox>(gf::StableId("characters.list"));
     (*list_).accessible_name = controls_ ? "Control characters" : "Unicode character page";
     glyph_ = gf::make_control<gf::Label>(gf::StableId("characters.glyph"));
-    (*glyph_).font = gf::FontSpec{gf::FontRole::content, 24, 400, false};
+    (*glyph_).font = stxlib::Optional<gf::FontSpec>::of(gf::FontSpec{gf::FontRole::content, 24, 400, false});
     (*glyph_).use_mnemonic = false;
     detail_ = gf::make_control<gf::Label>(gf::StableId("characters.detail"));
     (*detail_).text_wrapping = gf::TextWrapping::word;
@@ -108,13 +109,14 @@ void CharacterPicker::load_page(char32_t first) {
     }
 }
 swiftedit::CharacterInfo CharacterPicker::selected_info() const {
-    const std::optional<std::size_t> selected = (*list_).selected_index();
-    if (!selected || *selected >= rows_.size())
+    const stxlib::Optional<std::size_t> selection = (*list_).selected_index();
+    const std::size_t *const selected = selection.value();
+    if (selected == nullptr || *selected >= rows_.size())
         throw std::runtime_error("Select a character first.");
     return rows_[*selected];
 }
 void CharacterPicker::update_selection() {
-    if (!(*list_).selected_index())
+    if ((*list_).selected_index().absent())
         return;
     const swiftedit::CharacterInfo info = selected_info();
     const std::string label = swiftedit::codepoint_label(info.scalar);

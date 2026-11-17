@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+#include <stxlib/optional.hpp>
 #include <thread>
 #include <variant>
 #include "platform.hpp"
@@ -310,8 +311,8 @@ void verify_conflict_fields() {
     check(filename && encoding && endings, "Review controls are real owned dialog children");
     check((*filename).text.read() == notepad::path_utf8(dir / "original.1.txt"),
           "New copy suggests versioned name");
-    (*encoding).selected_index = 3;
-    (*endings).selected_index = 2;
+    (*encoding).selected_index = stxlib::Optional<std::size_t>::of(3U);
+    (*endings).selected_index = stxlib::Optional<std::size_t>::of(2U);
     (*editor).execute("conflict-review");
     const std::filesystem::path copy = dir / "edited-name.txt";
     (*filename).text = notepad::path_utf8(copy);
@@ -902,11 +903,13 @@ void verify_query_content_layout() {
     (*query).select(gf::Utf8Offset(80), gf::Utf8Offset(80));
     check((*query).layout_result() == gf::ContentLayoutResult::accepted && (*editing).layout_current(),
           "A field scrolled to its end resubmits an accepted layout");
-    const std::optional<gf::Rect> caret = (*editing).caret_rectangle();
-    const std::optional<gf::Rect> input_caret = window.text_input_caret();
-    check(caret.has_value() && (*caret).x >= 0 && (*caret).x <= 160,
+    const stxlib::Optional<gf::Rect> caret_box = (*editing).caret_rectangle();
+    const stxlib::Optional<gf::Rect> input_caret_box = window.text_input_caret();
+    const gf::Rect *const caret = caret_box.value();
+    const gf::Rect *const input_caret = input_caret_box.value();
+    check(caret != nullptr && (*caret).x >= 0 && (*caret).x <= 160,
           "The scrolled caret stays inside the field");
-    check(caret.has_value() && input_caret.has_value() && (*input_caret).x == (*caret).x,
+    check(caret != nullptr && input_caret != nullptr && (*input_caret).x == (*caret).x,
           "The input method's caret is QueryField's caret, not the field's left edge");
     (*query).set_text("find me");
     (*query).select(gf::Utf8Offset(0), gf::Utf8Offset(4));

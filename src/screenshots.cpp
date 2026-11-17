@@ -7,6 +7,7 @@
 #include <fstream>
 #include <stdexcept>
 #include <stx_png/encoder.hpp>
+#include <stxlib/optional.hpp>
 #include <vector>
 
 namespace notepad {
@@ -121,15 +122,17 @@ bool Editor::screenshot_step() {
 void Editor::capture_screenshot(const char *state) {
     gf::Window &owner = *window();
     owner.perform_layout();
-    const std::optional<gf::ControlSnapshot> taken = owner.snapshot_control(shared_from_this(), owner.scale());
-    if (!taken) {
+    const stxlib::Optional<gf::ControlSnapshot> snapshot = owner.snapshot_control(shared_from_this(), owner.scale());
+    const gf::ControlSnapshot *const taken = snapshot.value();
+    if (taken == nullptr) {
         screenshot_failures_.push_back(std::string(state) + ": this window cannot draw offscreen");
         return;
     }
-    const std::optional<gf::ImageResourceView> view = owner.image_resources().find((*taken).image);
+    const stxlib::Optional<gf::ImageResourceView> found = owner.image_resources().find((*taken).image);
+    const gf::ImageResourceView *const view = found.value();
     std::vector<std::byte> encoded{};
     bool written = false;
-    if (view && (*view).encoding == gf::ImageResourceEncoding::bgra32_premultiplied) {
+    if (view != nullptr && (*view).encoding == gf::ImageResourceEncoding::bgra32_premultiplied) {
         stx_png::PngEncodeInput input{};
         input.width = (*taken).pixel_width;
         input.height = (*taken).pixel_height;

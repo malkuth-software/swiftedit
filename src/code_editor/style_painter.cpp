@@ -16,21 +16,21 @@ StylePalette make_default_palette() noexcept {
     const gf::Color property = gf::Color::rgba(0x1d, 0x5e, 0x2f);
     const gf::Color function = gf::Color::rgba(0x7a, 0x4b, 0x00);
     const gf::Color invalid = gf::Color::rgba(0xa4, 0x16, 0x1a);
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::comment)] = comment;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::string)] = string;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::number)] = number;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::color)] = number;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::keyword)] = keyword;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::at_rule)] = keyword;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::important)] = keyword;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::type_selector)] = selector;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::identity_selector)] = selector;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::class_selector)] = selector;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::pseudo_selector)] = selector;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::property)] = property;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::custom_property)] = property;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::function)] = function;
-    palette.syntax[static_cast<std::size_t>(hl::TokenKind::invalid)] = invalid;
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::comment)].set(comment);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::string)].set(string);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::number)].set(number);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::color)].set(number);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::keyword)].set(keyword);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::at_rule)].set(keyword);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::important)].set(keyword);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::type_selector)].set(selector);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::identity_selector)].set(selector);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::class_selector)].set(selector);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::pseudo_selector)].set(selector);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::property)].set(property);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::custom_property)].set(property);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::function)].set(function);
+    palette.syntax[static_cast<std::size_t>(hl::TokenKind::invalid)].set(invalid);
     palette.rule_ground = gf::Color::rgba(0xe3, 0xee, 0xfa);
     palette.rule_focus_ground = gf::Color::rgba(0xc8, 0xdc, 0xf4);
     palette.search_ground = gf::Color::rgba(0xfb, 0xee, 0xb8);
@@ -50,23 +50,23 @@ const StylePalette &default_style_palette() noexcept {
 gf::TextDecorationStyle decoration_style(const hl::StyleRun &run, const StylePalette &palette) noexcept {
     gf::TextDecorationStyle style{};
     const std::size_t kind = static_cast<std::size_t>(run.syntax);
-    if (kind < palette.syntax.size() && palette.syntax[kind])
-        style.foreground = *palette.syntax[kind];
+    if (kind < palette.syntax.size())
+        style.foreground = palette.syntax[kind];
     const hl::DecorationMask mask = run.decorations;
     if (mask.has(hl::DecorationKind::search_current))
-        style.background = palette.search_current_ground;
+        style.background.set(palette.search_current_ground);
     else if (mask.has(hl::DecorationKind::search_match))
-        style.background = palette.search_ground;
+        style.background.set(palette.search_ground);
     else if (mask.has(hl::DecorationKind::rule_focus))
-        style.background = palette.rule_focus_ground;
+        style.background.set(palette.rule_focus_ground);
     else if (mask.has(hl::DecorationKind::rule_match))
-        style.background = palette.rule_ground;
+        style.background.set(palette.rule_ground);
     if (mask.has(hl::DecorationKind::diagnostic_error)) {
-        style.underline = gf::TextUnderline::squiggle;
-        style.underline_color = palette.error_underline;
+        style.underline.set(gf::TextUnderline::squiggle);
+        style.underline_color.set(palette.error_underline);
     } else if (mask.has(hl::DecorationKind::diagnostic_warning)) {
-        style.underline = gf::TextUnderline::squiggle;
-        style.underline_color = palette.warning_underline;
+        style.underline.set(gf::TextUnderline::squiggle);
+        style.underline_color.set(palette.warning_underline);
     }
     return style;
 }

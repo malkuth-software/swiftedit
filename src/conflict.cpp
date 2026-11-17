@@ -1,5 +1,6 @@
 #include "editor.hpp"
 #include <stdexcept>
+#include <stxlib/optional.hpp>
 
 namespace notepad {
 namespace {
@@ -81,8 +82,9 @@ void Editor::begin_conflict(const std::filesystem::path &path, Continuation next
     (*conflict_status_).text = "The destination changed outside SwiftEdit. Choose Save Over to replace it, Save "
                   "New Copy to keep it, or Cancel. Nothing has been written.";
     (*conflict_path_).text = path_utf8(path);
-    (*conflict_encoding_).selected_index = static_cast<std::size_t>(document_.encoding);
-    (*conflict_endings_).selected_index = 0;
+    (*conflict_encoding_).selected_index =
+        stxlib::Optional<std::size_t>::of(static_cast<std::size_t>(document_.encoding));
+    (*conflict_endings_).selected_index = stxlib::Optional<std::size_t>::of(0U);
     (*conflict_over_).enabled = true;
     (*conflict_copy_).enabled = true;
     (*conflict_path_).enabled = false;
@@ -135,9 +137,11 @@ void Editor::conflict_action(ButtonAction action) {
             return;
         }
         const std::filesystem::path target = reviewed_path((*conflict_path_).text.read());
-        const std::optional<std::size_t> encoding_index = (*conflict_encoding_).selected_index.read();
-        const std::optional<std::size_t> ending_index = (*conflict_endings_).selected_index.read();
-        if (!encoding_index || *encoding_index > 3 || !ending_index || *ending_index > 3)
+        const stxlib::Optional<std::size_t> encoding_choice = (*conflict_encoding_).selected_index.read();
+        const stxlib::Optional<std::size_t> ending_choice = (*conflict_endings_).selected_index.read();
+        const std::size_t *const encoding_index = encoding_choice.value();
+        const std::size_t *const ending_index = ending_choice.value();
+        if (encoding_index == nullptr || *encoding_index > 3 || ending_index == nullptr || *ending_index > 3)
             throw std::runtime_error("Choose an encoding and line-ending option.");
         const Encoding encoding = static_cast<Encoding>(*encoding_index);
         const swiftedit::SaveEndings endings = static_cast<swiftedit::SaveEndings>(*ending_index);

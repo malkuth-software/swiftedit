@@ -96,6 +96,29 @@ its prep branch is built against this one (`-DSWIFTEDIT_SOURCE_DIR`).
    - the focus override, `focusable = false` and the editor's property writes are gone: the document says them;
    - the layout, the flags, the history, the key preview and the pointer handling are unchanged.
 
+9. **#483 (D15 V1, `claude/conformance-port`)**, read against GUI.Forms `claude/batch-cp33` 48a8560a6 (contains
+   checkpoint/2026-11-15-cp32 4858cb741). GUI.Forms' `std::optional` is now `stxlib::Optional` (no implicit
+   construction from a value, no `operator*`, `operator!` or comparison with a value). The 28 errors of the
+   2026-11-16 conformance build (b4611bf) and every other site found by the sweep:
+   - `ListControl::selected_index()`, `ComboBox::selected_index`, `Window::snapshot_control`,
+     `ImageRegistry::find`, `ContentTextEditor::caret_rectangle` and `Window::text_input_caret` are read into a
+     named `stxlib::Optional` and then through its `value()` pointer (`character_picker.cpp`, `conflict.cpp`,
+     `screenshots.cpp`, `tests/editor_tests.cpp`); the font-role choice reads `value_or(0U)` (`editor.cpp`);
+   - writes to `selected_index` and to `Label::font` pass `stxlib::Optional<...>::of(...)` (`character_picker.cpp`,
+     `conflict.cpp`, `editor.cpp`, `tests/editor_tests.cpp`, which the build did not reach);
+   - `TextDecorationStyle`'s fields are `stxlib::Optional`: `decoration_style` uses `set`, and
+     `StylePalette::syntax` holds `stxlib::Optional<Color>` so a token's foreground is copied as it is;
+     `code_editor_tests` compares with named `::of` values.
+   - SwiftEdit's own `std::optional` (CSV, Markdown, documents, the highlighter) is unchanged: it does not cross
+     the GUI.Forms API.
+   - Checked, nothing to change: the near/far → start/end, nearby, compact, `DateTimeDropDownAlignment`,
+     `OperationStatus` and `OperationResult` renames (no use in sources or `.form`/`.control` files); no HarfBuzz
+     or FreeType component is requested (`COMPONENTS Application` only); no listener takes a GUI.Forms
+     `std::optional` event payload.
+   - The theme editor's two `override` errors came from its fetched SwiftEdit at the pinned e411177, whose
+     MarkerStrip still overrides `on_pointer` (removed by GUI.Forms 56b6627ea); this branch has the raisers
+     (item 3). The theme editor's build must pass `-DSWIFTEDIT_SOURCE_DIR` at this branch.
+
 ## Composite focus, rechecked against cp33
 
 The three gaps 336a43d found are closed by the content editing mode (item 7), not by composites:
@@ -151,6 +174,9 @@ Left for later: a description naming the flagged positions in the editor's node.
   - item 8: `editor_tests` `verify_query_content_layout` (no node of the field's own, the document's focus target
     and editor properties, the hook part's box); the `query-field.control` generation at build time (the form
     compiler checks the document); `view_tests` query paint through the hook (`on_paint` draws the labels);
+  - item 9: `code_editor_tests` (syntax colours, search grounds, the squiggle), `editor_tests` (the conflict review's
+    encoding and endings, `verify_query_content_layout`'s carets), and the character picker, font dialog and
+    screenshot paths through `editor_tests` and the native fixtures;
   - the app's form generation (`gui_forms_add_form`), the macOS native fixtures with faces from the pack, and the
     Linux and Windows packaging smoke runs.
 

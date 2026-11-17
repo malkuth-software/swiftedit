@@ -15,6 +15,7 @@
 // legible there; squiggles keep their shape.
 #include "highlight/code_document.hpp"
 #include <gui_forms/gui_forms.hpp>
+#include <stxlib/optional.hpp>
 #include <array>
 #include <cstddef>
 #include <vector>
@@ -24,7 +25,7 @@ namespace swiftedit {
 // The colours a painter gives each token kind and decoration kind.
 struct StylePalette final {
     // Indexed by TokenKind's value; plain text has no foreground.
-    std::array<std::optional<gui_forms::Color>, highlight::token_kind_count> syntax{};
+    std::array<stxlib::Optional<gui_forms::Color>, highlight::token_kind_count> syntax{};
     gui_forms::Color rule_ground{};
     gui_forms::Color rule_focus_ground{};
     gui_forms::Color search_ground{};

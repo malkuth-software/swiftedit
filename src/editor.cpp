@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <chrono>
 #include <stdexcept>
+#include <stxlib/optional.hpp>
 
 namespace notepad {
 std::string path_utf8(const std::filesystem::path &path) {
@@ -156,7 +157,7 @@ void Editor::button_action(ButtonAction action) {
         break;
     case ButtonAction::apply_font: {
         const gf::FontRole role =
-            (*font_role_).selected_index.read() == 0 ? gf::FontRole::monospace : gf::FontRole::content;
+            (*font_role_).selected_index.read().value_or(0U) == 0U ? gf::FontRole::monospace : gf::FontRole::content;
         const std::string size_text((*font_size_).selected_text());
         const double size = std::stod(size_text);
         const std::uint16_t weight = (*font_bold_).checked.read() ? 700 : 400;
@@ -1099,12 +1100,12 @@ void Editor::build_font() {
     (*font_.root).place(label, {16, 16, 380, 28});
     font_role_ = gf::make_control<gf::ComboBox>(gf::StableId("font.role"));
     (*font_role_).items = {"Monospace", "Content"};
-    (*font_role_).selected_index = 0;
+    (*font_role_).selected_index = stxlib::Optional<std::size_t>::of(0U);
     (*font_role_).accessible_name = "Font role";
     (*font_.root).place(font_role_, {16, 58, 220, 30});
     font_size_ = gf::make_control<gf::ComboBox>(gf::StableId("font.size"));
     (*font_size_).items = {"10", "12", "14", "16", "18", "20", "24", "28", "32"};
-    (*font_size_).selected_index = 2;
+    (*font_size_).selected_index = stxlib::Optional<std::size_t>::of(2U);
     (*font_size_).accessible_name = "Font size";
     (*font_.root).place(font_size_, {252, 58, 130, 30});
     font_bold_ = gf::make_control<gf::CheckBox>(gf::StableId("font.bold"), "Bold");

@@ -7,6 +7,7 @@
 #include <array>
 #include <iostream>
 #include <stdexcept>
+#include <stxlib/optional.hpp>
 #include <string>
 #include <vector>
 
@@ -213,10 +214,13 @@ void verify_styled_runs() {
     // Search matches get a ground, and the current match a stronger one.
     check((*editor).find("button", true) == 1U, "One match");
     text.styled_runs(gf::Utf8Range{gf::Utf8Offset(button), gf::Utf8Offset(button + 6U)}, runs);
-    check(runs.size() == 1U && runs[0].style.background == palette.search_ground, "A match has a ground");
+    const stxlib::Optional<gf::Color> search_ground = stxlib::Optional<gf::Color>::of(palette.search_ground);
+    check(runs.size() == 1U && runs[0].style.background == search_ground, "A match has a ground");
     check((*editor).find_next(), "The match is selected");
     text.styled_runs(gf::Utf8Range{gf::Utf8Offset(button), gf::Utf8Offset(button + 6U)}, runs);
-    check(runs.size() == 1U && runs[0].style.background == palette.search_current_ground,
+    const stxlib::Optional<gf::Color> current_ground =
+        stxlib::Optional<gf::Color>::of(palette.search_current_ground);
+    check(runs.size() == 1U && runs[0].style.background == current_ground,
           "The current match has the stronger ground");
     static_cast<void>((*editor).find("", true));
 
@@ -228,8 +232,10 @@ void verify_styled_runs() {
     (*editor).set_diagnostics(diagnostics, hl::ColumnUnit::unicode_scalar);
     const std::size_t colr = std::string_view(sheet).find("colr");
     text.styled_runs(gf::Utf8Range{gf::Utf8Offset(colr), gf::Utf8Offset(colr + 4U)}, runs);
-    check(!runs.empty() && runs[0].style.underline == gf::TextUnderline::squiggle &&
-              runs[0].style.underline_color == palette.error_underline,
+    const stxlib::Optional<gf::TextUnderline> squiggle =
+        stxlib::Optional<gf::TextUnderline>::of(gf::TextUnderline::squiggle);
+    const stxlib::Optional<gf::Color> error_underline = stxlib::Optional<gf::Color>::of(palette.error_underline);
+    check(!runs.empty() && runs[0].style.underline == squiggle && runs[0].style.underline_color == error_underline,
           "An error is a squiggle");
     text.select(gf::Utf8Offset(0U), gf::Utf8Offset(0U));
     text.replace_selection("/* c */\n");
