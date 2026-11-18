@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
         source.reserve(65 * 4096);
         for (std::size_t line = 0; line < 4096; ++line)
             source += "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789ab\n";
-        (*text).set_text(source);
+        (*text).text = source;
         const std::shared_ptr<gui_forms::Label> status =
             std::dynamic_pointer_cast<gui_forms::Label>(window.find("notepad.status"));
         if (!status)
@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
             const std::chrono::duration<double, std::milli> elapsed = finish - start;
             const std::string expected =
                 sample % 2 == 0 ? "Ln 4096, Col 64 |" : "Ln 4096, Col 63 |";
-            if (!(*status).text().starts_with(expected))
+            if (!(*status).text.read().starts_with(expected))
                 throw std::runtime_error("Navigation status correctness failed.");
             if (sample >= 100) {
                 samples.push_back(elapsed.count());

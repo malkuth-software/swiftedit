@@ -2,6 +2,7 @@
 #include "native_font_check.hpp"
 #include "new_window.hpp"
 #include "platform.hpp"
+#include <stdexcept>
 #include <chrono>
 #include <fstream>
 #include <iostream>
@@ -69,7 +70,10 @@ public:
             windows[index].options.ready = Ready{this, index};
             windows[index].options.closing = Closing{this, index};
         }
-        const gf::ApplicationResult result = gf::Application::run(std::move(windows));
+        gf::ApplicationCreateResult created = gf::Application::create(gf::ApplicationConfig{});
+        if (!created)
+            throw std::runtime_error("Cannot create the application.");
+        const gf::ApplicationResult result = (*created.application).run(std::move(windows));
         subscription_ = {};
         timer_.reset();
         if (failure_)
@@ -94,7 +98,7 @@ private:
         ++ready_count_;
         if (ready_count_ == hooks_.size()) {
             if (!parent_) {
-                require((*(*editor_).text_control()).text().empty(), "Child starts blank");
+                require((*(*editor_).text_control()).text.read().empty(), "Child starts blank");
                 receipt("child.ready");
             }
             timer_ = std::make_unique<gf::Timer>(*window_, std::chrono::milliseconds(50));
@@ -119,13 +123,13 @@ private:
                     std::chrono::steady_clock::now() - started;
                 std::cout << "new-window-command|return_ms=" << launch_time.count() << '\n';
                 require(!failure_, "Native child launch accepted");
-                require(text.text() == parent_text && text.selection() == selection &&
-                            (*editor_).document().dirty(text.text()), "Parent document preserved");
+                require(text.text.read() == parent_text && text.selection() == selection &&
+                            (*editor_).document().dirty(text.text.read()), "Parent document preserved");
             }
             require(!std::filesystem::exists("child.failed"), "Child reported native failure");
             if (!parent_ && !pasted_) {
                 clipboard_key(gf::PhysicalKey::v);
-                require(text.text() == copied_text, "Native Unicode clipboard crosses independent processes");
+                require(text.text.read() == copied_text, "Native Unicode clipboard crosses independent processes");
                 pasted_ = true;
                 receipt("child.pasted");
             }
@@ -134,10 +138,10 @@ private:
             if (!ready_to_close)
                 return;
             if (!parent_) {
-                require(text.text() == copied_text, "Child source remains independent after parent closes");
+                require(text.text.read() == copied_text, "Child source remains independent after parent closes");
                 text.select_all();
                 text.replace_selection("child still editable");
-                require(text.text() == "child still editable", "Child still accepts edits");
+                require(text.text.read() == "child still editable", "Child still accepts edits");
             }
             // Discard only this fixture's authored text before ordinary closing,
             // avoiding an unattended save dialog. Preservation was checked above.

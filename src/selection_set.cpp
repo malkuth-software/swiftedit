@@ -42,11 +42,11 @@ std::vector<SourceRange> map_selections(const Session &session, const gf::Docume
             throw std::runtime_error("Display selection endpoints must be ordered.");
         const gf::SourceMappingResult begin = view.source_position(token, selection.begin);
         const gf::SourceMappingResult end = view.source_position(token, selection.end);
-        if (begin.status != gf::DocumentViewStatus::success || end.status != gf::DocumentViewStatus::success ||
-            !begin.position || !end.position)
+        if (begin.status() != gf::DocumentViewStatus::success || end.status() != gf::DocumentViewStatus::success ||
+            !begin.position() || !end.position())
             throw std::runtime_error("Display selection is stale or splits a character or control label.");
-        const std::uint64_t first = (*begin.position).value;
-        const std::uint64_t last = (*end.position).value;
+        const std::uint64_t first = (*begin.position()).value;
+        const std::uint64_t last = (*end.position()).value;
         if (first > last || last > session.size())
             throw std::runtime_error("Mapped selection exceeds document.");
         // Editable Session size is below 16 MiB, so checked endpoints fit size_t.

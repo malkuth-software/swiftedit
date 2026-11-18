@@ -1,7 +1,7 @@
 # SwiftEdit
 
-A native C++20 text editor built with the installed GUI.Forms and File Manager
-Document Picker packages. Traditional dropdown menus, owned dialogs, plain-text
+A native C++20 text editor built with the installed GUI.Forms package, using its
+own Open and Save dialogs. Traditional dropdown menus, owned dialogs, plain-text
 clipboard, no ribbon, browser runtime or persistent recovery files.
 
 **Downloads:** [SwiftEdit releases](https://github.com/falseywinchnet/swiftedit/releases).
@@ -68,9 +68,8 @@ This is not a claim that the full expanded product is finished.
 ## Build and run
 
 SwiftEdit follows the standalone GUI.Forms / PlaySuite LLVM 22 build contract.
-The exact GUI.Forms and File Manager picker revisions and published compiler-cache
-hashes are recorded in `ci/dependencies.json`. The old `ci/native-sdk-lock.json`
-is retained only as historical release evidence; current CI does not use it.
+The exact GUI.Forms revision and published compiler-cache hashes are recorded
+in `ci/dependencies.json`.
 
 Install LLVM 22.1.x, CMake 3.25+, Ninja, ccache, Python 3.12+, Git and GitHub CLI.
 Windows uses MSYS2 **CLANG64**; put its `bin` directory on PATH. macOS uses
@@ -85,16 +84,17 @@ ctest --preset windows-x64
 ```
 
 Use `linux-x64`, `linux-arm64` or `macos-arm64` for the other hosts. Preparation checks out the
-pinned providers, authenticates the published GUI.Forms cache, and builds the
-public installed GUI.Forms and picker packages with the same toolchain.
+pinned GUI.Forms, authenticates its published cache, and builds its SDK with
+its own `tools/build_sdk.py` (the stx packages, stx_rtf2md among them, install
+into the same prefix) with the same toolchain.
 Cache misses compile from pinned source. Integrity failures stop the import.
 The source directory layout matches the provider's cache contract. Provider
 sources stay in ignored directories; SwiftEdit links their exported CMake targets.
 
 On a machine with a shared GUI.Forms lockstep build, set `SWIFTEDIT_LOCKSTEP`
 to its record (for example `D:/malkuth/cache/lockstep/current-windows-x64.json`).
-`prepare_dependencies.py` then builds only the picker against the record's
-installed prefix, and `tools/Build-Native.py --platform windows-x64` builds and
+`prepare_dependencies.py` then only records the record's installed prefix,
+and `tools/Build-Native.py --platform windows-x64` builds and
 tests SwiftEdit in `.build/native-<platform>/app-lockstep`, without native
 window tests and without packaging; packages come only from pinned builds.
 `harness.lock` pins template_harness and must equal the GUI.Forms pin's
@@ -107,8 +107,8 @@ the script, so put PowerShell 7 (`pwsh`) on PATH for local runs, as CI does.
 code with AddressSanitizer and UndefinedBehaviorSanitizer (LeakSanitizer too on
 Linux and macOS, with `tests/lsan.supp`) in `app-sanitize` (or
 `app-lockstep-sanitize`) and runs the headless tests; every report fails the
-run. Each native CI job runs it after packaging. The installed GUI.Forms,
-picker and stx_rtf2md packages are not instrumented.
+run. Each native CI job runs it after packaging. The installed GUI.Forms
+and stx_rtf2md packages are not instrumented.
 
 `cmake --build --preset windows-x64 --target swiftedit-app` builds the GUI,
 terminal and CLI. `swiftedit-check` builds the test executables and runs CTest.
@@ -140,8 +140,8 @@ Run `dist/SwiftEdit/swiftedit-cli.exe` with stdin/stdout pipes for command sessi
 
 This is an independent repository at `C:/Users/Shadow/notepad`; the source
 directory and historical internal C++ namespace have not been renamed.
-GUI.Forms owns native editing mechanics, File Manager owns the picker, SwiftEdit
-owns interpretation, session behavior and publication. See
+GUI.Forms owns native editing mechanics and the host Open and Save As dialogs;
+SwiftEdit owns interpretation, session behavior and publication. See
 [known gaps](docs/KNOWN_GAPS.md) and [validation](docs/VALIDATION.md).
 
 ## MacBook and cross-platform builds

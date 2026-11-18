@@ -21,7 +21,7 @@ std::string cell_label(std::string_view value) {
     return result;
 }
 } // namespace
-CsvView::CsvView(gf::StableId id) : Control(std::move(id)) { set_focusable(true); }
+CsvView::CsvView(gf::StableId id) : Control(std::move(id)) { focusable = true; }
 CsvView::~CsvView() = default;
 std::weak_ptr<CsvView> CsvView::observe() {
     const std::shared_ptr<CsvView> self = std::static_pointer_cast<CsvView>(shared_from_this());
@@ -50,13 +50,13 @@ void CsvView::EntryListener::operator()(const std::string &) const {
 }
 void CsvView::initialize_control_tree() {
     entry_ = gf::make_control<gf::TextBox>(gf::StableId("csv.entry"));
-    (*entry_).set_accessible_name("Cell source or formula; Enter to apply");
-    (*entry_).set_maximum_length(4096);
+    (*entry_).accessible_name = "Cell source or formula; Enter to apply";
+    (*entry_).maximum_length = 4096;
     // An in-place cell editor: plain Enter stores the cell (committed) and
     // plain Escape abandons the edit (cancelled). Since GUI.Forms 0.2 a
     // single-line box passes both keys on unless it opts in.
-    (*entry_).set_accepts_enter(true);
-    (*entry_).set_accepts_escape(true);
+    (*entry_).accepts_enter = true;
+    (*entry_).accepts_escape = true;
     add_child(entry_);
     vertical_ = gf::make_control<gf::VScrollBar>(gf::StableId("csv.vertical"));
     horizontal_ = gf::make_control<gf::HScrollBar>(gf::StableId("csv.horizontal"));
@@ -92,8 +92,7 @@ void CsvView::cancel_calculations() {
     cells_dirty_ = true;
 }
 void CsvView::set_context_command(const std::shared_ptr<gf::Command> &command) {
-    (*context_).set_items(
-        {{"csv.convert-value", gf::MenuItemKind::command, command, "Convert to Value"}});
+    (*context_).set_items({{"csv.convert-value", gf::MenuItemKind::command, command, "Convert to Value"}});
 }
 void CsvView::set_source(std::string_view source) {
     if (table_ && source == source_) {
@@ -137,8 +136,8 @@ void CsvView::arrange(gf::Rect bounds) {
     whole_columns_ = std::clamp(
         static_cast<std::size_t>(std::max(1.0, (bounds.width - header_width - 18) / column_width)),
         std::size_t(1), std::size_t(32));
-    (*vertical_).set_large_change(static_cast<double>(visible_rows_));
-    (*horizontal_).set_large_change(static_cast<double>(whole_columns_));
+    (*vertical_).large_change = static_cast<double>(visible_rows_);
+    (*horizontal_).large_change = static_cast<double>(whole_columns_);
     update_scrollbars();
     if (old_rows != visible_rows_ || old_columns != whole_columns_)
         reveal_caret();
@@ -154,32 +153,32 @@ void CsvView::update_scrollbars() {
     // reset fitting axes so an earlier narrow layout cannot retain blank space.
     (*vertical_).set_range(0, static_cast<double>(std::max<std::size_t>(1, last_top)));
     (*horizontal_).set_range(0, static_cast<double>(std::max<std::size_t>(1, last_left)));
-    (*vertical_).set_enabled(last_top != 0);
-    (*horizontal_).set_enabled(last_left != 0);
+    (*vertical_).enabled = last_top != 0;
+    (*horizontal_).enabled = last_left != 0;
     if (!last_top)
-        (*vertical_).set_value(0);
+        (*vertical_).value = 0;
     if (!last_left)
-        (*horizontal_).set_value(0);
+        (*horizontal_).value = 0;
 }
 void CsvView::reveal_caret() {
     if (!table_)
         return;
     if (caret_.row < top_)
-        (*vertical_).set_value(static_cast<double>(caret_.row));
+        (*vertical_).value = static_cast<double>(caret_.row);
     else if (caret_.row >= top_ + visible_rows_)
-        (*vertical_).set_value(static_cast<double>(caret_.row - visible_rows_ + 1));
+        (*vertical_).value = static_cast<double>(caret_.row - visible_rows_ + 1);
     // Painting includes a partially exposed column, but navigation must use
     // only complete columns so the selected cell is not hidden at the edge.
     if (caret_.column < left_)
-        (*horizontal_).set_value(static_cast<double>(caret_.column));
+        (*horizontal_).value = static_cast<double>(caret_.column);
     else if (caret_.column >= left_ + whole_columns_)
-        (*horizontal_).set_value(static_cast<double>(caret_.column - whole_columns_ + 1));
+        (*horizontal_).value = static_cast<double>(caret_.column - whole_columns_ + 1);
 }
 void CsvView::prepare_view() {
     if (!table_)
         return;
-    const std::size_t top = static_cast<std::size_t>((*vertical_).value());
-    const std::size_t left = static_cast<std::size_t>((*horizontal_).value());
+    const std::size_t top = static_cast<std::size_t>((*vertical_).value.read());
+    const std::size_t left = static_cast<std::size_t>((*horizontal_).value.read());
     if (!cells_dirty_ && top == top_ && left == left_ && cached_rows_ == visible_rows_ &&
         cached_columns_ == visible_columns_)
         return;
@@ -220,6 +219,21 @@ void CsvView::prepare_view() {
     advance_view();
     invalidate(gf::Dirty::paint);
 }
+void CsvView::CalculationTick::operator()(gf::FrameTime now) const {
+    const std::shared_ptr<CsvView> target = owner.lock();
+    if (!target)
+        return;
+    (*target).calculation_frame_.disconnect();
+    (*target).on_frame(now);
+}
+void CsvView::schedule_calculation() {
+    if (!window())
+        return;
+    const gf::FrameTime deadline = gf::FrameClock::now() + std::chrono::milliseconds(1);
+    const std::shared_ptr<CsvView> self = std::static_pointer_cast<CsvView>(shared_from_this());
+    calculation_frame_ = (*window()).schedule_ui_timer(*this, gf::minimum_ui_timer_interval, deadline,
+                                                       CalculationTick{self});
+}
 void CsvView::on_frame(gf::FrameTime) {
     if (!calculations_pending())
         return;
@@ -256,10 +270,7 @@ void CsvView::advance_view() {
         calculation_requested_ = true;
         // Adopt new work on a later frame, even when the worker finishes now.
         // Input must retain its cancellation boundary before conversion commits.
-        if (window()) {
-            const gf::FrameTime deadline = gf::FrameClock::now() + std::chrono::milliseconds(1);
-            calculation_frame_ = (*window()).schedule_paint(shared_from_this(), deadline);
-        }
+        schedule_calculation();
         return;
     }
     // Formula evaluation runs against immutable owned source on one worker.
@@ -321,8 +332,7 @@ void CsvView::advance_view() {
             break;
     }
     if (calculations_pending() && window()) {
-        const gf::FrameTime deadline = gf::FrameClock::now() + std::chrono::milliseconds(1);
-        calculation_frame_ = (*window()).schedule_paint(shared_from_this(), deadline);
+        schedule_calculation();
     } else if (!calculations_pending()) {
         calculation_requested_ = false;
         formula_sources_.clear();
@@ -338,7 +348,7 @@ void CsvView::update_field() {
         cancel_conversion();
     if (!table_)
         return;
-    (*entry_).set_text((*table_).cell(caret_).value);
+    (*entry_).text = (*table_).cell(caret_).value;
 }
 void CsvView::select_cell(swiftedit::CellAddress address) {
     if (!table_)
@@ -496,7 +506,7 @@ void CsvView::clear_hover() {
         invalidate(gf::Dirty::paint);
     }
 }
-void CsvView::on_pointer(gf::PointerEvent &event) {
+void CsvView::handle_pointer(gf::PointerEvent &event) {
     if (event.phase != gf::EventPhase::target)
         return;
     if (event.action == gf::PointerAction::leave) {
@@ -561,13 +571,44 @@ void CsvView::on_pointer(gf::PointerEvent &event) {
         invalidate(gf::Dirty::paint);
     }
 }
+void CsvView::on_mouse_down(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_down(arguments);
+}
+void CsvView::on_mouse_up(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_up(arguments);
+}
+void CsvView::on_mouse_move(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_move(arguments);
+}
+void CsvView::on_mouse_wheel(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_wheel(arguments);
+}
+void CsvView::on_mouse_leave() {
+    gf::PointerEvent event{};
+    event.action = gf::PointerAction::leave;
+    event.phase = gf::EventPhase::target;
+    handle_pointer(event);
+    gf::Control::on_mouse_leave();
+}
 void CsvView::on_focus_changed(bool focused) {
     if (!focused && conversion_) {
         cancel_conversion();
         invalidate(gf::Dirty::paint);
     }
 }
-void CsvView::on_key(gf::KeyEvent &event) {
+void CsvView::handle_key(gf::KeyEvent &event) {
     if (event.phase != gf::EventPhase::target || event.action != gf::KeyAction::down || !table_)
         return;
     if (event.physical_key == gf::PhysicalKey::escape && conversion_) {
@@ -626,6 +667,14 @@ void CsvView::on_key(gf::KeyEvent &event) {
         invalidate(gf::Dirty::paint);
         event.handled = true;
     }
+}
+void CsvView::on_key_down(gf::KeyEventArgs &arguments) {
+    gf::Control::on_key_down(arguments);
+    if (arguments.handled)
+        return;
+    gf::KeyEvent event = gf::key_event_of(arguments, gf::KeyAction::down);
+    handle_key(event);
+    arguments.handled = event.handled;
 }
 void CsvView::on_paint(gf::Painter &painter, gf::Rect) {
     const gf::Rect bounds = arranged_bounds();

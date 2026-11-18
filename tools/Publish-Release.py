@@ -79,7 +79,7 @@ def main() -> None:
         '- **Windows:** x64 per-user setup executable, with Start menu shortcut and uninstall entry; portable ZIP also available. Unsigned.\n'
         '- **macOS:** Apple silicon `.pkg` installs SwiftEdit.app into Applications; portable ZIP also available. Built on macOS 15 using the GUI.Forms macOS 14 runtime contract. Ad-hoc signed app; installer unsigned and not notarized.\n'
         '- **Linux:** Ubuntu 24.04-compatible amd64 and arm64 `.deb` packages, with desktop launcher and terminal commands; portable x64 and arm64 tarballs also available. X11 session required.\n\n'
-        'Archives and installers include the GUI, terminal editor, CLI, runtime libraries, fonts and license notices. '
+        'Archives and installers include the GUI, terminal editor, CLI, runtime libraries and license notices (fonts are compiled in). '
         'SHA-256 sidecars and exact source/dependency manifests accompany the downloads.\n', encoding='utf-8')
     existing: dict | None = probe(['api', 'repos/' + repository + '/releases/tags/' + tag])
     published: bool = existing is not None and not existing['draft']

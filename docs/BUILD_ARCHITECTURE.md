@@ -4,7 +4,9 @@ Compared with PlaySuite `origin/main` at `80f5ba8` on 2026-10-07, especially
 `applications.yml`, `restore_toolkit_cache.py` and the public CMake targets.
 SwiftEdit now uses the same reviewed GUI.Forms source pin, `e589142`, and its
 LLVM 22 contract. `ci/dependencies.json` is the authoritative full-revision and
-archive-digest lock. The File Manager picker is separately pinned at `964261f`.
+archive-digest lock. SwiftEdit no longer consumes the File Manager picker:
+Open and Save As use GUI.Forms' host file dialogs. The measurements below are
+the 2026-10-07 record and name the picker as it was then.
 
 ## Reuse and boundaries
 
@@ -22,10 +24,9 @@ archive-digest lock. The File Manager picker is separately pinned at `964261f`.
 - The renderer has a separate source/output cache. macOS runtime imports are
   verified by the provider's payload/compiler/SDK validator and minimum-platform
   audit, with source rebuild on mismatch.
-- GUI.Forms and the picker are built by their own CMake projects, installed
-  together and consumed through `GUIForms::Application` and
-  `FileManager::DocumentPickerView`. No provider-private implementation is
-  copied into SwiftEdit. The picker-only target does not build backend services.
+- GUI.Forms is built by its own CMake project (`gui/tools/build_sdk.py`),
+  installed and consumed through `GUIForms::Application`. No provider-private
+  implementation is copied into SwiftEdit.
   Application owns the shared Core used by the document model and GUI; the
   consumer does not link a second static Core alongside it.
 - SwiftEdit's compiler cache is saved after successful compilation, before

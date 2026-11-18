@@ -7,7 +7,7 @@ dragging, wheel input, clipping, caret reveal and offset clamping.
 
 This consumes GUI.Forms PR #14, merged at
 `4e126d6eb3ab837f1a44c0e9c9eb7901d50f80bb`. Its control ABI changed, so GUI.Forms,
-the document picker and SwiftEdit must be rebuilt together. SwiftEdit's document
+the then-consumed document picker and SwiftEdit had to be rebuilt together. SwiftEdit's document
 model links `GUIForms::Application`, sharing the same Core as its GUI rather
 than mixing static and shared Core implementations.
 

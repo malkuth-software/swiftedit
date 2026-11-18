@@ -2,6 +2,8 @@
 # GUI.Forms pin's gui_forms/harness.lock: GUI.Forms' tools forward to the
 # harness checked out beside it (template_harness/ at this root), and
 # tools/prepare_dependencies.py refuses a mismatch.
+# Set to gui_forms/harness.lock at checkpoint/2026-11-15-cp32 (#483); confirm it still
+# equals that file at the merged GUI.Forms main commit.
 [harness]
 repository = "malkuth-software/template_harness"
-commit = "523c2a7a7f36d1ae06e82fa031f56599e25d3e18"
+commit = "88c035cab1fec002c05e228a6d2515fc9a00bc3d"

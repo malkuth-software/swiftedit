@@ -1,4 +1,4 @@
-"""Package tested Windows/Linux binaries with their non-system runtime closure."""
+"""Package tested Windows/Linux binaries: the programs alone, importing only system libraries."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -28,79 +28,100 @@ def digest(path: Path) -> str:
     return result
 
 
-def windows_libraries(executables: list[Path], destination: Path, sdk: Path) -> None:
+def windows_refusals(imports: list[str], system: Path) -> list[str]:
+    """Each imported DLL that is not a Windows system DLL in `system`.
+
+    `imports` are the DLL Name entries objdump -p lists. API sets resolve in
+    the loader; every other DLL must lie in System32.
+    """
+    refused: list[str] = []
+    dependency: str
+    for dependency in imports:
+        if dependency.casefold().startswith(('api-ms-win-', 'ext-ms-win-')):
+            continue
+        if not (system / dependency).is_file():
+            refused.append(dependency)
+    return refused
+
+
+def windows_programs_only(executables: list[Path]) -> None:
+    """Refuse a program importing any DLL but Windows' own (one module, 2026-11-15).
+
+    GUI.Forms, the codecs and the LLVM runtimes are linked into each program,
+    so nothing is copied beside it; a non-system import fails the package.
+    """
     tool: str | None = shutil.which('objdump')
     if tool is None:
         raise RuntimeError('objdump is required for dependency inspection')
     system: Path = Path(os.environ['WINDIR']) / 'System32'
-    directories: list[Path] = [executables[0].parent, sdk / 'gui-forms-sdk/bin',
-                               sdk / 'picker-sdk/bin', Path(tool).parent, system]
-    pending: list[Path] = list(executables)
-    seen: set[str] = set()
-    while pending:
-        binary: Path = pending.pop()
-        listing: str = run([tool, '-p', str(binary)])
-        dependency: str
-        for dependency in re.findall(r'DLL Name:\s*(\S+)', listing):
-            key: str = dependency.casefold()
-            if key in seen or key.startswith(('api-ms-win-', 'ext-ms-win-')):
-                continue
-            seen.add(key)
-            found: Path | None = None
-            directory: Path
-            for directory in directories:
-                candidate: Path = directory / dependency
-                if candidate.is_file():
-                    found = candidate.resolve()
-                    break
-            if found is None:
-                raise RuntimeError('Unresolved Windows dependency: ' + dependency)
-            if found.is_relative_to(system.resolve()):
-                continue
-            target: Path = destination / dependency
-            if target.exists() and digest(target) != digest(found):
-                raise RuntimeError('Conflicting runtime dependency: ' + dependency)
-            shutil.copy2(found, target)
-            pending.append(found)
-
-
-def linux_libraries(executables: list[Path], destination: Path) -> None:
-    baseline: set[str] = {'libc.so.6', 'libm.so.6', 'libdl.so.2', 'libpthread.so.0',
-                          'librt.so.1', 'libresolv.so.2', 'libutil.so.1'}
-    libraries: dict[str, Path] = {}
+    failures: list[str] = []
     binary: Path
     for binary in executables:
-        listing: str = run(['ldd', str(binary)])
-        if 'not found' in listing:
-            raise RuntimeError('Unresolved Linux runtime dependency: ' + listing)
-        line: str
-        for line in listing.splitlines():
-            match: re.Match[str] | None = re.search(r'^\s*(\S+) => (/\S+)', line)
-            if match is None or match.group(1) in baseline:
-                continue
-            name: str = match.group(1)
-            source: Path = Path(match.group(2)).resolve()
-            if name in libraries and digest(libraries[name]) != digest(source):
-                raise RuntimeError('Conflicting Linux dependency: ' + name)
-            libraries[name] = source
-    name: str
-    source: Path
-    for name, source in libraries.items():
-        shutil.copy2(source, destination / name)
-        ownership: subprocess.CompletedProcess[str] = subprocess.run(
-            ['dpkg-query', '-S', str(source)], text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, check=False, timeout=15)
-        if ownership.returncode == 0:
-            package: str = ownership.stdout.split(': ', 1)[0]
-            package = package.split(':', 1)[0]
-            notice: Path = Path('/usr/share/doc') / package / 'copyright'
-            if notice.is_file():
-                notices: Path = destination.parent / 'licenses/system'
-                notices.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(notice, notices / (package + '.copyright'))
+        listing: str = run([tool, '-p', str(binary)])
+        imports: list[str] = re.findall(r'DLL Name:\s*(\S+)', listing)
+        dependency: str
+        for dependency in windows_refusals(imports, system):
+            failures.append(binary.name + ': ' + dependency)
+    if failures:
+        raise RuntimeError('A shipped program imports only system DLLs; found:\n  ' + '\n  '.join(failures))
 
-    for binary in list(destination.iterdir()) + executables:
-        run(['patchelf', '--set-rpath', '$ORIGIN/../lib', str(binary)])
+
+# One module (owner, 2026-11-15): a Linux package carries the programs alone
+# and uses the desktop's own glibc, X11 (or XWayland), ATK and GLib; it is
+# built against no distribution's copies. A NEEDED entry must be one of
+# these system libraries (the C library, its loader, libgcc_s, libutil for
+# the terminal's pseudo-terminal, and the libraries GUI.Forms' Linux host
+# links), and every library ldd resolves must lie in a system directory.
+LINUX_SYSTEM_LIBRARY: re.Pattern[str] = re.compile(
+    r'(?:lib(?:c|m|dl|pthread|rt|resolv|util|gcc_s)\.so\.\d+'
+    r'|ld-linux[\w.-]*\.so\.\d+|linux-(?:vdso|gate)\.so\.1'
+    r'|libX(?:11|fixes|render|cursor|randr|ext|i)\.so\.\d+'
+    r'|libatk-1\.0\.so\.0|libatk-bridge-2\.0\.so\.0'
+    r'|lib(?:gio|gobject|glib)-2\.0\.so\.0)')
+LINUX_SYSTEM_DIRECTORIES: tuple[str, ...] = ('/lib/', '/lib32/', '/lib64/', '/usr/lib/', '/usr/lib32/', '/usr/lib64/')
+
+
+def linux_refusals(needed_listing: str, ldd_listing: str) -> list[str]:
+    """Each NEEDED entry or ldd line that is not the desktop's own library.
+
+    `needed_listing` is `readelf -d` output and `ldd_listing` is `ldd` output
+    for the same binary. An empty list means it imports only system
+    libraries.
+    """
+    refused: list[str] = []
+    name: str
+    for name in re.findall(r'\(NEEDED\)\s+Shared library: \[([^\]]+)\]', needed_listing):
+        if LINUX_SYSTEM_LIBRARY.fullmatch(name) is None:
+            refused.append(name)
+    line: str
+    for line in ldd_listing.splitlines():
+        line = line.strip()
+        if not line or 'statically linked' in line:
+            continue
+        if 'not found' in line:
+            refused.append(line)
+            continue
+        match: re.Match[str] | None = re.search(r'=>\s*(/\S+)', line)
+        if match is None:
+            match = re.match(r'(/\S+)', line)
+        if match is not None and not match.group(1).startswith(LINUX_SYSTEM_DIRECTORIES):
+            refused.append(line)
+    return refused
+
+
+def linux_programs_only(executables: list[Path]) -> None:
+    """Refuse a program importing a non-system library; clear build RUNPATHs."""
+    failures: list[str] = []
+    binary: Path
+    for binary in executables:
+        refused: list[str] = linux_refusals(run(['readelf', '-d', str(binary)]), run(['ldd', str(binary)]))
+        name: str
+        for name in refused:
+            failures.append(binary.name + ': ' + name)
+    if failures:
+        raise RuntimeError('A shipped program imports only system libraries; found:\n  ' + '\n  '.join(failures))
+    for binary in executables:
+        run(['patchelf', '--remove-rpath', str(binary)])
 
 
 def main() -> None:
@@ -125,8 +146,6 @@ def main() -> None:
     root.mkdir()
     binaries: Path = root if windows else root / 'bin'
     binaries.mkdir(exist_ok=True)
-    libraries: Path = root if windows else root / 'lib'
-    libraries.mkdir(exist_ok=True)
     suffix: str = '.exe' if windows else ''
     originals: list[Path] = []
     packaged: list[Path] = []
@@ -138,21 +157,21 @@ def main() -> None:
         originals.append(source)
         packaged.append(target)
     if windows:
-        windows_libraries(originals, libraries, sdk)
+        windows_programs_only(originals)
     else:
-        linux_libraries(packaged, libraries)
+        linux_programs_only(packaged)
         for name in ['SwiftEdit', 'swiftedit-terminal', 'swiftedit-cli']:
             launcher: Path = root / name
             launcher.write_text('#!/bin/sh\nroot=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
-                                'export GUI_FORMS_FONT_DIR="$root/fonts"\n'
-                                'export LD_LIBRARY_PATH="$root/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"\n'
                                 'exec "$root/bin/' + name + '" "$@"\n', encoding='utf-8')
             launcher.chmod(0o755)
-    shutil.copytree(sdk / 'gui-forms-sdk/share/GUIForms/fonts', root / 'fonts')
+    # The SDK's font directory holds the bundled faces' licences only; the
+    # faces are compiled into GUI.Forms (font pack stage 4).
+    shutil.copytree(sdk / 'gui-forms-sdk/share/GUIForms/fonts', root / 'licenses/fonts')
     shutil.copytree('third_party/md4c', root / 'licenses/MD4C', ignore=shutil.ignore_patterns('*.c', '*.h'))
     shutil.copy2('third_party/unicode/LICENSE.txt', root / 'licenses/Unicode.txt')
     component: str
-    for component in ['gui-forms-sdk', 'picker-sdk', 'stx-rtf2md-sdk']:
+    for component in ['gui-forms-sdk']:
         notices: Path = sdk / component / 'share/licenses'
         if notices.is_dir():
             shutil.copytree(notices, root / 'licenses' / component)
@@ -213,7 +232,7 @@ def main() -> None:
         'SwiftEdit cross-platform dogfood build\n\nExtract the entire archive together. '
         'Run SwiftEdit' + suffix + ' for the GUI; swiftedit-terminal' + suffix +
         ' for terminal editing; swiftedit-cli' + suffix + ' for the command protocol.\n'
-        'This build is unsigned. Linux requires an X11 session and Ubuntu 24.04-compatible runtime.\n'
+        'This build is unsigned. Linux requires an X11 session (or XWayland); the programs use the desktop\'s own X11 and C library.\n'
         'The GUI currently has a 1 MiB UTF-8 / 4096-byte logical-line limit; large-file '
         'operations are available in the terminal and CLI. Expanded GUI features and idle CPU investigation remain open.\n',
         encoding='utf-8')

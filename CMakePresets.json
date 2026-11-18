@@ -18,7 +18,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk;${sourceDir}/.build/native-windows-x64/sdk/picker-sdk;${sourceDir}/.build/native-windows-x64/sdk/stx-rtf2md-sdk",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
@@ -28,7 +28,6 @@
         "CCACHE_DIR": "${sourceDir}/.ccache",
         "CCACHE_BASEDIR": "${sourceDir}",
         "CCACHE_COMPILERCHECK": "content",
-        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk/share/GUIForms/fonts",
         "PATH": "${sourceDir}/.build/native-windows-x64/sdk/gui-forms-sdk/bin;$penv{PATH}"
       }
     },
@@ -44,7 +43,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-linux-x64/sdk/gui-forms-sdk;${sourceDir}/.build/native-linux-x64/sdk/picker-sdk;${sourceDir}/.build/native-linux-x64/sdk/stx-rtf2md-sdk",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-linux-x64/sdk/gui-forms-sdk",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
@@ -53,8 +52,7 @@
       "environment": {
         "CCACHE_DIR": "${sourceDir}/.ccache",
         "CCACHE_BASEDIR": "${sourceDir}",
-        "CCACHE_COMPILERCHECK": "content",
-        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-linux-x64/sdk/gui-forms-sdk/share/GUIForms/fonts"
+        "CCACHE_COMPILERCHECK": "content"
       }
     },
     {
@@ -69,7 +67,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-linux-arm64/sdk/gui-forms-sdk;${sourceDir}/.build/native-linux-arm64/sdk/picker-sdk;${sourceDir}/.build/native-linux-arm64/sdk/stx-rtf2md-sdk",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-linux-arm64/sdk/gui-forms-sdk",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
@@ -78,8 +76,7 @@
       "environment": {
         "CCACHE_DIR": "${sourceDir}/.ccache",
         "CCACHE_BASEDIR": "${sourceDir}",
-        "CCACHE_COMPILERCHECK": "content",
-        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-linux-arm64/sdk/gui-forms-sdk/share/GUIForms/fonts"
+        "CCACHE_COMPILERCHECK": "content"
       }
     },
     {
@@ -94,7 +91,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/gui_forms/cmake/llvm22.cmake",
-        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-macos-arm64/sdk/gui-forms-sdk;${sourceDir}/.build/native-macos-arm64/sdk/picker-sdk;${sourceDir}/.build/native-macos-arm64/sdk/stx-rtf2md-sdk",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/.build/native-macos-arm64/sdk/gui-forms-sdk",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
         "CMAKE_OBJCXX_COMPILER_LAUNCHER": "ccache",
@@ -104,7 +101,6 @@
         "CCACHE_DIR": "${sourceDir}/.ccache",
         "CCACHE_BASEDIR": "${sourceDir}",
         "CCACHE_COMPILERCHECK": "content",
-        "GUI_FORMS_FONT_DIR": "${sourceDir}/.build/native-macos-arm64/sdk/gui-forms-sdk/share/GUIForms/fonts",
         "GUI_FORMS_LLVM_RUNTIME": "${sourceDir}/.build/toolchain/llvm-22.1.8-macos14"
       }
     }

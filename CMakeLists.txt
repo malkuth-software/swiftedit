@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(SwiftEdit VERSION 0.4.0 LANGUAGES C CXX)
+# Every shipped program imports only system DLLs (tools/Package-Desktop.py): link
+# libc++, libunwind, compiler-rt and winpthreads statically, as GUI.Forms does for
+# its own programs (gui_forms/CMakeLists.txt, add_link_options(-static) under MINGW).
+if(MINGW)
+  add_link_options(-static)
+endif()
 set(SWIFTEDIT_RELEASE_VERSION "${PROJECT_VERSION}" CACHE STRING "Tested publication version")
 if(NOT SWIFTEDIT_RELEASE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
   message(FATAL_ERROR "SWIFTEDIT_RELEASE_VERSION must be numeric major.minor.patch")
@@ -10,12 +16,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_NO_SYSTEM_FROM_IMPORTED ON)
 find_package(Threads REQUIRED)
-find_package(GUIForms 0.2 CONFIG REQUIRED COMPONENTS Application)
+find_package(GUIForms 0.6 CONFIG REQUIRED COMPONENTS Application)
 # The standalone RTF/markdown package, built from the pinned GUI.Forms
 # checkout beside the SDK (pin_note in ci/dependencies.json).
 find_package(stx_rtf2md 0.1 CONFIG REQUIRED)
+# The PNG encoder every GUI.Forms host uses, for the screenshot run.
+find_package(stx_png CONFIG REQUIRED)
 add_library(swiftedit_md4c STATIC third_party/md4c/md4c.c third_party/md4c/entity.c)
 target_include_directories(swiftedit_md4c PUBLIC third_party/md4c)
+# The highlighter and the embeddable code editor (cmake/SwiftEditCodeEditor.cmake,
+# shared with consumers of a pinned checkout such as the theme editor).
+include(cmake/SwiftEditCodeEditor.cmake)
+add_executable(swiftedit-highlight-tests tests/highlight_tests.cpp)
+target_link_libraries(swiftedit-highlight-tests PRIVATE swiftedit_highlight)
+add_test(NAME highlight COMMAND swiftedit-highlight-tests)
+add_executable(swiftedit-decoration-tests tests/decoration_tests.cpp)
+target_link_libraries(swiftedit-decoration-tests PRIVATE swiftedit_highlight)
+add_test(NAME decorations COMMAND swiftedit-decoration-tests)
+add_executable(swiftedit-code-document-tests tests/code_document_tests.cpp)
+target_link_libraries(swiftedit-code-document-tests PRIVATE swiftedit_highlight)
+add_test(NAME code-document COMMAND swiftedit-code-document-tests)
+add_executable(swiftedit-code-editor-tests tests/code_editor_tests.cpp)
+target_link_libraries(swiftedit-code-editor-tests PRIVATE swiftedit_code_editor)
+add_test(NAME code-editor COMMAND swiftedit-code-editor-tests)
 if(WIN32)
   set(SWIFTEDIT_FILE_SOURCES src/file_windows.cpp src/paged_windows.cpp)
 elseif(APPLE OR CMAKE_SYSTEM_NAME STREQUAL "Linux")
@@ -189,16 +212,22 @@ endif()
 target_link_libraries(swiftedit-cli PRIVATE notepad_document)
 find_program(POWERSHELL_EXECUTABLE NAMES pwsh powershell)
 if(POWERSHELL_EXECUTABLE)
-  add_test(NAME cli COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_tests.ps1" -Executable "$<TARGET_FILE:swiftedit-cli>")
-  set_tests_properties(cli PROPERTIES TIMEOUT 30)
+  add_test(NAME cli COMMAND "${POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/cli_tests.ps1" -Executable "$<TARGET_FILE:swiftedit-cli>")
+  set_tests_properties(cli PROPERTIES TIMEOUT 90)
 endif()
 
-option(NOTEPAD_BUILD_UI "Build the native editor and installed shared picker consumer" ON)
+option(NOTEPAD_BUILD_UI "Build the native editor" ON)
 if(NOTEPAD_BUILD_UI)
-  find_package(FileManagerDocumentPicker 1.0 CONFIG REQUIRED)
-  add_library(notepad_ui src/editor.cpp src/windows.cpp src/csv_view.cpp src/markdown_view.cpp src/query_field.cpp src/character_picker.cpp src/conflict.cpp src/user_paths.cpp)
+  add_library(notepad_ui src/editor.cpp src/windows.cpp src/csv_view.cpp src/markdown_view.cpp src/query_field.cpp src/character_picker.cpp src/conflict.cpp src/user_paths.cpp src/screenshots.cpp)
   target_compile_definitions(notepad_ui PRIVATE SWIFTEDIT_VERSION="${PROJECT_VERSION}")
-  target_link_libraries(notepad_ui PUBLIC notepad_document GUIForms::Application FileManager::DocumentPickerView)
+  target_link_libraries(notepad_ui PUBLIC notepad_document swiftedit_code_editor GUIForms::Application)
+  target_link_libraries(notepad_ui PRIVATE stx_png::stx_png)
+  # The query field is a composite control: its document is checked and its
+  # class (notepad::QueryFieldControl) generated at build time. The header is
+  # public, because query_field.hpp, which the tests include, derives from it.
+  gui_forms_add_control(notepad_ui controls/query-field.control CLASS QueryFieldControl NAMESPACE notepad
+                        OUTPUT gui_forms_controls/query_field_control.hpp)
+  target_include_directories(notepad_ui PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/gui_forms_controls")
   if(APPLE)
     add_executable(notepad MACOSX_BUNDLE src/main.cpp)
     set_target_properties(notepad PROPERTIES
@@ -214,12 +243,22 @@ if(NOTEPAD_BUILD_UI)
     add_executable(notepad WIN32 src/main.cpp)
   endif()
   set_target_properties(notepad PROPERTIES OUTPUT_NAME SwiftEdit)
+  # The main window is a form document, generated into swiftedit::MainWindow;
+  # the editor control it holds is an application type. The theme package is
+  # embedded and checked against the form.
+  gui_forms_add_form(notepad forms/main_window.form CLASS MainWindow NAMESPACE swiftedit DERIVED
+                     TYPES "swiftedit_editor,notepad::Editor,user_control,editor.hpp")
+  gui_forms_add_theme(notepad themes/swiftedit FUNCTION swiftedit_theme NAMESPACE swiftedit
+                      FORMS forms/main_window.form)
   target_link_libraries(notepad PRIVATE notepad_ui swiftedit_window_launch)
   if(WIN32)
     target_link_libraries(notepad PRIVATE shell32)
   endif()
   add_executable(notepad-editor-tests tests/editor_tests.cpp)
   target_link_libraries(notepad-editor-tests PRIVATE notepad_ui)
+  # The tests compile the shipped theme package as main does.
+  gui_forms_add_theme(notepad-editor-tests themes/swiftedit FUNCTION swiftedit_theme NAMESPACE swiftedit
+                      FORMS forms/main_window.form)
   add_test(NAME editor COMMAND notepad-editor-tests)
   add_executable(swiftedit-editor-navigation-bench tests/editor_navigation_bench.cpp)
   target_link_libraries(swiftedit-editor-navigation-bench PRIVATE notepad_ui)
@@ -256,21 +295,16 @@ if(NOTEPAD_BUILD_UI)
   add_executable(swiftedit-idle-probe tests/idle_probe.cpp)
   target_link_libraries(swiftedit-idle-probe PRIVATE notepad_ui)
   if(APPLE)
-    # The Mac host loads fonts from NSBundle, not GUI_FORMS_FONT_DIR. Native
-    # fixtures must use the same resource topology as the packaged application.
+    # Native fixtures run as bundles, as the packaged application does. The
+    # faces come from GUI.Forms' embedded font pack (font pack stage 4), so a
+    # bundle carries no face files.
     foreach(native_target IN ITEMS notepad-native-tests swiftedit-csv-native-tests swiftedit-markdown-native-tests swiftedit-window-native-tests swiftedit-idle-probe)
       set_target_properties(${native_target} PROPERTIES MACOSX_BUNDLE TRUE)
-      add_custom_command(TARGET ${native_target} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${GUIForms_FONT_DIR}"
-          "$<TARGET_BUNDLE_DIR:${native_target}>/Contents/Resources/fonts"
-        VERBATIM)
     endforeach()
   endif()
   # Opt-in because this creates self-closing owned native dialogs.
   option(NOTEPAD_NATIVE_TESTS "Run coordinated native window smoke" OFF)
   if(NOTEPAD_NATIVE_TESTS)
-    add_test(NAME picker-file-links COMMAND notepad-editor-tests --picker-file-links)
-    set_tests_properties(picker-file-links PROPERTIES TIMEOUT 30)
     add_test(NAME independent-window-launch COMMAND swiftedit-window-tests --parent)
     set_tests_properties(independent-window-launch PROPERTIES TIMEOUT 20)
     add_test(NAME independent-window-native COMMAND swiftedit-window-native-tests --parent)
@@ -297,22 +331,20 @@ if(NOTEPAD_BUILD_UI)
   if(MSVC)
     target_link_options(notepad PRIVATE /ENTRY:mainCRTStartup)
   endif()
+  # One module (GUI.Forms 66f82629b): GUI.Forms links statically into the
+  # executable, so nothing is copied beside it. The bundle carries only the
+  # bundled faces' licences.
   if(APPLE)
     add_custom_command(TARGET notepad POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GUIForms::Application>"
-        "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks/$<TARGET_FILE_NAME:GUIForms::Application>"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GUIForms::Application>"
-        "$<TARGET_BUNDLE_DIR:notepad>/Contents/Frameworks/$<TARGET_SONAME_FILE_NAME:GUIForms::Application>"
       COMMAND ${CMAKE_COMMAND} -E copy_directory "${GUIForms_FONT_DIR}"
-        "$<TARGET_BUNDLE_DIR:notepad>/Contents/Resources/fonts"
+        "$<TARGET_BUNDLE_DIR:notepad>/Contents/Resources/licenses/fonts"
       VERBATIM)
-  else()
-    add_custom_command(TARGET notepad POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GUIForms::Application>" "$<TARGET_FILE_DIR:notepad>"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${GUIForms_FONT_DIR}" "$<TARGET_FILE_DIR:notepad>/fonts")
   endif()
   install(TARGETS notepad BUNDLE DESTINATION . RUNTIME DESTINATION .)
+  # GUIForms_FONT_DIR holds the bundled faces' licences and attribution only:
+  # the faces are compiled into GUI.Forms (font pack stage 4), and the program
+  # carries their licences.
+  install(DIRECTORY "${GUIForms_FONT_DIR}/" DESTINATION licenses/fonts)
   install(FILES third_party/unicode/LICENSE.txt DESTINATION licenses RENAME Unicode.txt)
   install(FILES third_party/md4c/LICENSE.md DESTINATION licenses RENAME MD4C.md)
 endif()

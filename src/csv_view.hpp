@@ -24,10 +24,16 @@ public:
     gf::Event<const std::string &> &changed() { return changed_; }
     void arrange(gf::Rect) override;
     void on_paint(gf::Painter &, gf::Rect) override;
-    void on_pointer(gf::PointerEvent &) override;
-    void on_key(gf::KeyEvent &) override;
+    // The routed form of the target phase: the mouse raisers feed it, and
+    // tests drive it directly with a PointerEvent.
+    void handle_pointer(gf::PointerEvent &);
+    // The routed form of a key down at the target: on_key_down feeds it,
+    // and tests drive it directly with a KeyEvent.
+    void handle_key(gf::KeyEvent &);
     void on_focus_changed(bool) override;
-    void on_frame(gf::FrameTime) override;
+    // Advances pending calculations by one bounded slice. The view's own UI
+    // timer calls it; tests may call it to drive the work deterministically.
+    void on_frame(gf::FrameTime);
     void cancel_calculations();
     [[nodiscard]] bool calculations_pending() const { return next_calculation_ < calculations_.size(); }
     const std::string &status() const { return status_; }
@@ -35,6 +41,14 @@ public:
     gf::ContextMenu &context_menu() const { return *context_; }
 
 protected:
+    // The target phase: each raiser hands the routed form to handle_pointer
+    // or handle_key.
+    void on_mouse_down(gf::MouseEventArgs &arguments) override;
+    void on_mouse_up(gf::MouseEventArgs &arguments) override;
+    void on_mouse_move(gf::MouseEventArgs &arguments) override;
+    void on_mouse_wheel(gf::MouseEventArgs &arguments) override;
+    void on_mouse_leave() override;
+    void on_key_down(gf::KeyEventArgs &arguments) override;
     void on_dispose() noexcept override;
 
 private:
@@ -46,6 +60,13 @@ private:
         std::weak_ptr<CsvView> owner{};
         void operator()(const double &) const;
     };
+    // The calculation timer's target: one slice per tick, then the tick
+    // ends itself (advance_view schedules the next when work remains).
+    struct CalculationTick {
+        std::weak_ptr<CsvView> owner{};
+        void operator()(gf::FrameTime) const;
+    };
+    void schedule_calculation();
     struct EntryListener {
         std::weak_ptr<CsvView> owner{};
         void operator()() const;

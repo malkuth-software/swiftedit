@@ -53,7 +53,7 @@ struct MarkdownView::LayoutWork {
     std::vector<double> x{}, row_y{}, line_height{};
 };
 MarkdownView::~MarkdownView() = default;
-MarkdownView::MarkdownView(gf::StableId id) : Control(std::move(id)) { set_focusable(true); }
+MarkdownView::MarkdownView(gf::StableId id) : Control(std::move(id)) { focusable = true; }
 void MarkdownView::align_line(std::vector<Run> &next, std::size_t first, double left, double right, double end,
                               swiftedit::MarkdownAlignment alignment) {
     if (alignment == swiftedit::MarkdownAlignment::left || first >= next.size())
@@ -123,8 +123,8 @@ void MarkdownView::initialize_control_tree() {
         (*vertical_).value_changed().subscribe(*this, ScrollListener{observer}));
     subscriptions_.push_back(
         (*horizontal_).value_changed().subscribe(*this, ScrollListener{observer}));
-    (*vertical_).set_small_change(32);
-    (*horizontal_).set_small_change(32);
+    (*vertical_).small_change = 32;
+    (*horizontal_).small_change = 32;
 }
 void MarkdownView::on_dispose() noexcept {
     cancel_preparation();
@@ -229,8 +229,8 @@ void MarkdownView::arrange(gf::Rect bounds) {
                                  std::max(0.0, bounds.height - ruler_height - 18)});
     set_child_layout(horizontal_,
                      {0, std::max(0.0, bounds.height - 18), std::max(0.0, bounds.width - 18), 18});
-    (*vertical_).set_large_change(std::max(32.0, bounds.height - ruler_height - 18));
-    (*horizontal_).set_large_change(std::max(32.0, bounds.width - 18));
+    (*vertical_).large_change = std::max(32.0, bounds.height - ruler_height - 18);
+    (*horizontal_).large_change = std::max(32.0, bounds.width - 18);
     if (layout_work_ && (*layout_work_).width != bounds.width)
         layout_work_.reset();
     if (layout_width_ != bounds.width)
@@ -463,12 +463,12 @@ void MarkdownView::update_scroll_ranges() {
     const double horizontal_extent = std::max(0.0, content_width_ - bounds.width + 18);
     (*vertical_).set_range(0, std::max(1.0, vertical_extent));
     (*horizontal_).set_range(0, std::max(1.0, horizontal_extent));
-    (*vertical_).set_enabled(vertical_extent > 0);
-    (*horizontal_).set_enabled(horizontal_extent > 0);
+    (*vertical_).enabled = vertical_extent > 0;
+    (*horizontal_).enabled = horizontal_extent > 0;
     if (!vertical_extent)
-        (*vertical_).set_value(0);
+        (*vertical_).value = 0;
     if (!horizontal_extent)
-        (*horizontal_).set_value(0);
+        (*horizontal_).value = 0;
 }
 void MarkdownView::advance_layout(gf::TextMetricsProvider &provider) {
     const gf::FrameTime layout_start = gf::FrameClock::now();
@@ -510,7 +510,7 @@ void MarkdownView::on_paint(gf::Painter &painter, gf::Rect) {
         painter.draw_text_utf8({24, 48}, layout_error_, font, style.text);
         return;
     }
-    const double top = (*vertical_).value(), left = (*horizontal_).value();
+    const double top = (*vertical_).value.read(), left = (*horizontal_).value.read();
     painter.save();
     painter.clip_rect({0, ruler_height, std::max(0.0, bounds.width - 18),
                        std::max(0.0, bounds.height - ruler_height - 18)});
@@ -565,7 +565,15 @@ void MarkdownView::clear_hover() {
     if (tooltip_)
         (*tooltip_).hide();
 }
-void MarkdownView::on_key(gf::KeyEvent &event) {
+void MarkdownView::on_key_down(gf::KeyEventArgs &arguments) {
+    gf::Control::on_key_down(arguments);
+    if (arguments.handled)
+        return;
+    gf::KeyEvent event = gf::key_event_of(arguments, gf::KeyAction::down);
+    handle_key(event);
+    arguments.handled = event.handled;
+}
+void MarkdownView::handle_key(gf::KeyEvent &event) {
     if (event.phase == gf::EventPhase::target && event.action == gf::KeyAction::down &&
         event.physical_key == gf::PhysicalKey::escape && (preparation_pending_ || layout_pending())) {
         cancel_preparation();
@@ -581,28 +589,59 @@ void MarkdownView::on_key(gf::KeyEvent &event) {
     const gf::Rect bounds = arranged_bounds();
     const double page = std::max(32.0, bounds.height - ruler_height - 18);
     if (plain && event.physical_key == gf::PhysicalKey::up) {
-        if ((*vertical_).enabled()) (*vertical_).increment(-32);
+        if ((*vertical_).enabled.read()) (*vertical_).increment(-32);
     } else if (plain && event.physical_key == gf::PhysicalKey::down) {
-        if ((*vertical_).enabled()) (*vertical_).increment(32);
+        if ((*vertical_).enabled.read()) (*vertical_).increment(32);
     } else if (plain && event.physical_key == gf::PhysicalKey::page_up) {
-        if ((*vertical_).enabled()) (*vertical_).increment(-page);
+        if ((*vertical_).enabled.read()) (*vertical_).increment(-page);
     } else if (plain && event.physical_key == gf::PhysicalKey::page_down) {
-        if ((*vertical_).enabled()) (*vertical_).increment(page);
+        if ((*vertical_).enabled.read()) (*vertical_).increment(page);
     } else if ((plain || document) && event.physical_key == gf::PhysicalKey::home) {
-        (*vertical_).set_value(0);
+        (*vertical_).value = 0;
     } else if ((plain || document) && event.physical_key == gf::PhysicalKey::end) {
-        if ((*vertical_).enabled())
-            (*vertical_).set_value(std::max(0.0, content_height_ - bounds.height + ruler_height + 18));
+        if ((*vertical_).enabled.read())
+            (*vertical_).value = std::max(0.0, content_height_ - bounds.height + ruler_height + 18);
     } else if (plain && event.physical_key == gf::PhysicalKey::left) {
-        if ((*horizontal_).enabled()) (*horizontal_).increment(-32);
+        if ((*horizontal_).enabled.read()) (*horizontal_).increment(-32);
     } else if (plain && event.physical_key == gf::PhysicalKey::right) {
-        if ((*horizontal_).enabled()) (*horizontal_).increment(32);
+        if ((*horizontal_).enabled.read()) (*horizontal_).increment(32);
     } else {
         return;
     }
     event.handled = true;
 }
-void MarkdownView::on_pointer(gf::PointerEvent &event) {
+void MarkdownView::on_mouse_down(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_down(arguments);
+}
+void MarkdownView::on_mouse_up(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_up(arguments);
+}
+void MarkdownView::on_mouse_move(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_move(arguments);
+}
+void MarkdownView::on_mouse_wheel(gf::MouseEventArgs &arguments) {
+    gf::PointerEvent event = gf::pointer_event_of(arguments);
+    handle_pointer(event);
+    arguments.handled = event.handled;
+    gf::Control::on_mouse_wheel(arguments);
+}
+void MarkdownView::on_mouse_leave() {
+    gf::PointerEvent event{};
+    event.action = gf::PointerAction::leave;
+    event.phase = gf::EventPhase::target;
+    handle_pointer(event);
+    gf::Control::on_mouse_leave();
+}
+void MarkdownView::handle_pointer(gf::PointerEvent &event) {
     if (event.phase != gf::EventPhase::target)
         return;
     if (event.action == gf::PointerAction::wheel) {
@@ -624,8 +663,8 @@ void MarkdownView::on_pointer(gf::PointerEvent &event) {
     const gf::Rect content{bounds.x, bounds.y + ruler_height,
                            std::max(0.0, bounds.width - 18),
                            std::max(0.0, bounds.height - ruler_height - 18)};
-    const gf::Point point{event.position.x - bounds.x + (*horizontal_).value(),
-                          event.position.y - bounds.y - ruler_height + (*vertical_).value()};
+    const gf::Point point{event.position.x - bounds.x + (*horizontal_).value.read(),
+                          event.position.y - bounds.y - ruler_height + (*vertical_).value.read()};
     std::string url{};
     if (event.action == gf::PointerAction::move && content.contains(event.position) &&
         !layout_dirty_ && layout_error_.empty()) {

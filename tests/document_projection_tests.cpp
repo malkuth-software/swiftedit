@@ -45,8 +45,8 @@ void verify_decoded_projection(const std::filesystem::path &directory) {
         check(view.bind(initial.revision, gf::SourceByteOffset(session.size())) == gf::DocumentViewStatus::success,
               "Decoded view binds logical UTF-8 size");
         const gf::DocumentRequestResult issued = view.request_page(initial.viewport, initial.permitted);
-        check(issued.request.has_value(), "Decoded page request issued");
-        const gf::DocumentPageRequest token = *issued.request;
+        check((issued.request() != nullptr), "Decoded page request issued");
+        const gf::DocumentPageRequest token = *issued.request();
         se::DocumentProjection producer(session, token);
         finish(producer, session);
         gf::DocumentPage page{};
@@ -56,13 +56,13 @@ void verify_decoded_projection(const std::filesystem::path &directory) {
         check(view.publish(std::move(page)) == gf::DocumentViewStatus::success, "Decoded page adopted");
         const gf::SourceMappingResult begin = view.source_position(token, gf::DisplayByteOffset(2));
         const gf::SourceMappingResult end = view.source_position(token, gf::DisplayByteOffset(10));
-        check(begin.position.has_value() && end.position.has_value() &&
-                  (*begin.position).value == 8 && (*end.position).value == 9,
+        check((begin.position() != nullptr) && (end.position() != nullptr) &&
+                  (*begin.position()).value == 8 && (*end.position()).value == 9,
               "Generated NUL label endpoints map to absolute logical source bytes");
         const gf::SourceMappingResult interior = view.source_position(token, gf::DisplayByteOffset(3));
-        check(!interior.position.has_value(), "Generated label interior cannot become source caret");
+        check((interior.position() == nullptr), "Generated label interior cannot become source caret");
         const gf::DisplayMappingResult inverse = view.display_position(token, gf::SourceByteOffset(9));
-        check(inverse.position.has_value() && (*inverse.position).value == 10,
+        check((inverse.position() != nullptr) && (*inverse.position()).value == 10,
               "Decoded source position round trips through public view mapping");
         bool refused = false;
         try {
@@ -120,7 +120,7 @@ void verify_decoded_projection(const std::filesystem::path &directory) {
         const se::DocumentStamp changed = session.stamp();
         check(view.bind({changed.identity.value, changed.revision.value}, gf::SourceByteOffset(session.size())) ==
                   gf::DocumentViewStatus::success, "Changed Session revision rebinds view");
-        check(!view.source_position(token, gf::DisplayByteOffset(2)).position.has_value(),
+        check(view.source_position(token, gf::DisplayByteOffset(2)).position() == nullptr,
               "Rebound view refuses old projected position");
         check(session.undo() && session.text() == source, "Mapped replacement is one undoable edit");
         session.save();
@@ -141,17 +141,17 @@ void verify_dense_labels(const std::filesystem::path &directory) {
     check(view.bind(initial.revision, gf::SourceByteOffset(session.size())) == gf::DocumentViewStatus::success,
           "Dense-label view binds");
     const gf::DocumentRequestResult issued = view.request_page(initial.viewport, initial.permitted);
-    check(issued.request.has_value(), "Dense-label request issued");
-    se::DocumentProjection producer(session, *issued.request);
+    check((issued.request() != nullptr), "Dense-label request issued");
+    se::DocumentProjection producer(session, *issued.request());
     finish(producer, session);
     gf::DocumentPage page{};
     check(producer.publish(session, page) && page.mapping.size() == source.size(),
           "Every dense control keeps its own atomic mapping at the mapping limit");
     check(view.publish(std::move(page)) == gf::DocumentViewStatus::success,
           "Installed provider accepts complete dense-label mapping");
-    const gf::SourceMappingResult boundary = view.source_position(*issued.request, gf::DisplayByteOffset(262144));
-    const gf::SourceMappingResult interior = view.source_position(*issued.request, gf::DisplayByteOffset(262145));
-    check(boundary.position.has_value() && (*boundary.position).value == 32768 && !interior.position.has_value(),
+    const gf::SourceMappingResult boundary = view.source_position(*issued.request(), gf::DisplayByteOffset(262144));
+    const gf::SourceMappingResult interior = view.source_position(*issued.request(), gf::DisplayByteOffset(262145));
+    check((boundary.position() != nullptr) && (*boundary.position()).value == 32768 && (interior.position() == nullptr),
           "Adjacent identical labels keep independent boundaries and refuse label interiors");
     check(session.text() == source && !session.dirty(), "Dense-label projection preserves every source byte");
 }
@@ -177,8 +177,8 @@ int main() {
         check(view.bind(initial.revision, gf::SourceByteOffset(session.size())) == gf::DocumentViewStatus::success,
               "Installed D1 view accepts Session revision");
         const gf::DocumentRequestResult issued = view.request_page(initial.viewport, initial.permitted);
-        check(issued.request.has_value(), "Installed D1 issues page request");
-        se::DocumentProjection producer(session, *issued.request);
+        check((issued.request() != nullptr), "Installed D1 issues page request");
+        se::DocumentProjection producer(session, *issued.request());
         check(producer.step(session) == se::ProjectionState::pending, "Read and projection are separate steps");
         finish(producer, session);
         gf::DocumentPage page{};
@@ -192,11 +192,11 @@ int main() {
               "Literal label source differs from generated atomic control label");
         check(view.publish(std::move(page)) == gf::DocumentViewStatus::success,
               "Installed public D1 accepts produced payload");
-        const gf::SourceMappingResult literal_position = view.source_position(*issued.request, gf::DisplayByteOffset(4));
-        check(literal_position.position.has_value() && (*literal_position.position).value == 4,
+        const gf::SourceMappingResult literal_position = view.source_position(*issued.request(), gf::DisplayByteOffset(4));
+        check((literal_position.position() != nullptr) && (*literal_position.position()).value == 4,
               "Coalesced literal label keeps interior source positions");
-        const gf::SourceMappingResult generated_position = view.source_position(*issued.request, gf::DisplayByteOffset(9));
-        check(!generated_position.position.has_value(), "Generated label interior stays atomic beside identity run");
+        const gf::SourceMappingResult generated_position = view.source_position(*issued.request(), gf::DisplayByteOffset(9));
+        check((generated_position.position() == nullptr), "Generated label interior stays atomic beside identity run");
         check(session.text() == source && !session.dirty(), "Projection never mutates document bytes");
         check(!producer.publish(session, page), "Projection publication is single use");
         se::DocumentProjection split(session, request(session, 0, 11));

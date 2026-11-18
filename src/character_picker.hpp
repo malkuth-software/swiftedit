@@ -17,7 +17,7 @@ public:
     gf::Event<> &closed() { return closed_; }
     std::shared_ptr<gf::Button> insert_button() const { return insert_; }
     std::shared_ptr<gf::Button> close_button() const { return close_; }
-    std::string status() const { return (*detail_).text(); }
+    std::string status() const { return (*detail_).text.read(); }
 
 protected:
     void on_dispose() noexcept override;

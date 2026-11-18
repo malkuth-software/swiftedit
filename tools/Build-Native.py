@@ -37,7 +37,7 @@ def sha256(path: Path) -> str:
 # The sanitized configuration, matching GUI.Forms' sanitizer trees
 # (template_harness ci_build_steps.py): AddressSanitizer and
 # UndefinedBehaviorSanitizer on SwiftEdit's own code, every report fatal,
-# line tables only. The installed GUI.Forms, picker and stx_rtf2md packages
+# line tables only. The installed GUI.Forms and stx_rtf2md packages
 # are not instrumented; their code runs unchecked but their allocations are
 # still tracked. LeakSanitizer runs where AddressSanitizer carries it (Linux
 # and macOS; the MinGW runtime on Windows has none), with SwiftEdit's
@@ -83,12 +83,14 @@ def main() -> None:
     phase: argparse._MutuallyExclusiveGroup = parser.add_mutually_exclusive_group()
     phase.add_argument('--build-only', action='store_true')
     phase.add_argument('--test-package-only', action='store_true')
+    phase.add_argument('--package-only', action='store_true',
+                       help='package an already built tree without ctest or the benchmarks')
     parser.add_argument('--sanitize', action='store_true',
                         help='build and test SwiftEdit under AddressSanitizer and UndefinedBehaviorSanitizer')
     arguments: argparse.Namespace = parser.parse_args()
     if arguments.jobs < 1:
         parser.error('--jobs must be positive')
-    if arguments.sanitize and (arguments.installers or arguments.test_package_only):
+    if arguments.sanitize and (arguments.installers or arguments.test_package_only or arguments.package_only):
         parser.error('a sanitized build is tested, never packaged')
     # SWIFTEDIT_LOCKSTEP (local builds only; tools/prepare_dependencies.py)
     # builds against the machine's lockstep GUI.Forms in trees of its own. It
@@ -104,30 +106,27 @@ def main() -> None:
     prefix: str
     if lockstep:
         if (manifest.get('dependency_mode') != 'lockstep-installed-prefix'
-                or manifest['picker_revision'] != dependencies['picker_revision']
                 or manifest['platform'] != arguments.platform):
             raise RuntimeError('The lockstep packages differ from the dependency lock; run prepare_dependencies.py')
         gui = Path(manifest['gui_forms_prefix'])
         toolchain = Path(manifest['toolchain_file'])
-        os.environ['GUI_FORMS_FONT_DIR'] = manifest['font_dir']
         os.environ['CCACHE_DIR'] = manifest['ccache_dir']
         if manifest['llvm_runtime']:
             os.environ['GUI_FORMS_LLVM_RUNTIME'] = manifest['llvm_runtime']
         # The lockstep prefix carries stx_rtf2md beside GUI.Forms.
-        prefix = str(gui) + ';' + str(sdk / 'picker-sdk')
+        prefix = str(gui)
     else:
         if (manifest['provider_revision'] != dependencies['revision']
-                or manifest['picker_revision'] != dependencies['picker_revision']
                 or manifest.get('stx_rtf2md_revision') != dependencies['revision']
                 or manifest['platform'] != arguments.platform):
             raise RuntimeError('Installed packages differ from the dependency lock')
         gui = sdk / 'gui-forms-sdk'
         toolchain = Path('gui_forms/cmake/llvm22.cmake').resolve()
-        os.environ['GUI_FORMS_FONT_DIR'] = str(gui / 'share/GUIForms/fonts')
         os.environ['CCACHE_DIR'] = str(Path('.ccache').resolve())
         if arguments.platform == 'macos-arm64':
             os.environ['GUI_FORMS_LLVM_RUNTIME'] = str(Path('.build/toolchain/llvm-22.1.8-macos14').resolve())
-        prefix = str(gui) + ';' + str(sdk / 'picker-sdk') + ';' + str(sdk / 'stx-rtf2md-sdk')
+        # The SDK prefix carries the stx packages beside GUI.Forms.
+        prefix = str(gui)
     lock: dict = {'provider_revision': manifest['provider_revision']}
     os.environ['PATH'] = str(gui / 'bin') + os.pathsep + os.environ['PATH']
     os.environ['CCACHE_BASEDIR'] = str(Path('.').resolve())
@@ -136,7 +135,7 @@ def main() -> None:
     configuration: list[str] = ['-DCMAKE_BUILD_TYPE=Release']
     if arguments.sanitize:
         configuration = sanitizer_configuration(arguments.platform)
-    if not arguments.test_package_only:
+    if not (arguments.test_package_only or arguments.package_only):
         run(['cmake', '-S', '.', '-B', str(build), '-G', 'Ninja'] + configuration + [
              '-DSWIFTEDIT_RELEASE_VERSION=' + project_version(),
              '-DCMAKE_PREFIX_PATH=' + prefix, '-DNOTEPAD_NATIVE_TESTS=' + ('ON' if native_tests else 'OFF'),
@@ -145,6 +144,11 @@ def main() -> None:
              '-DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache'])
         run(['cmake', '--build', str(build), '--parallel', str(arguments.jobs)])
     if arguments.build_only:
+        return
+    if arguments.package_only:
+        if lockstep:
+            raise RuntimeError('A lockstep build is never packaged')
+        package_build(arguments, build, sdk)
         return
     run(['ctest', '--test-dir', str(build), '--output-on-failure', '--timeout', '60'])
     if arguments.sanitize:
@@ -262,6 +266,10 @@ def main() -> None:
         raise
     finally:
         (navigation_evidence / 'receipt.json').write_text(json.dumps(navigation_receipt, indent=2) + '\n', encoding='utf-8')
+    package_build(arguments, build, sdk)
+
+
+def package_build(arguments: argparse.Namespace, build: Path, sdk: Path) -> None:
     package: list[str] = [sys.executable, '-B', 'tools/Package-Mac.py', '--build', str(build), '--sdk', str(sdk)]
     if arguments.platform != 'macos-arm64':
         package = [sys.executable, '-B', 'tools/Package-Desktop.py', '--build', str(build),

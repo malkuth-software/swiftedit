@@ -9,7 +9,8 @@ Date: 2026-09-29. Status: provisional Windows implementation, not interview clos
 
 **GIVEN:** Current owner direction explicitly starts a conventional standalone
 Notepad implementation in `C:/Users/Shadow/notepad`, using public GUI.Forms and
-the installed shared File Manager Document Picker. It supersedes the historic
+the installed shared File Manager Document Picker (since replaced by GUI.Forms'
+host file dialogs). It supersedes the historic
 interview-first implementation gate for this development task. It does not
 answer the eighteen older interview questions or declare a suite release.
 
@@ -44,8 +45,8 @@ These are **CANDIDATE, implemented for development**, not architect-approved ADR
 | Undo | Public GUI.Forms bounded in-memory undo/redo. Save does not reset undo; New/Open does. Replace All is one replacement/undo action. No recovery session storage. | History budget, crash recovery and close promises. |
 | Search | Literal forward search with one wrap; case-sensitive default; optional ASCII A-Z folding only. Replace All uses nonoverlapping matches in the original input. No regex/wildcards. | Unicode case folding, word/selection scope, whitecards grammar. |
 | Display | Wrap off; status on; monospace 14. Font dialog selects toolkit font role, size, weight and italic. Status column counts Unicode scalars, not screen cells/graphemes. | Font-family picker, status semantics and durable preferences. |
-| Picker | Shared installed FileManager::DocumentPickerView in owned windows. All-files default, hidden shown, session-only state; exact filename without forced extension. Explicit trusted local host authority, not a claimed daemon session. | Durable app profile, validated daemon grant and platform scope. |
-| Lifecycle | One main document with owned reusable picker/find/font windows. Picker disables editor commands. New/Open/Close ask Save/Discard/Cancel; failed/cancelled Save As cancels the pending operation. | Multiwindow launch and duplicate-open policy. |
+| File dialogs | GUI.Forms' host Open and Save As dialogs (the File Manager picker was retired with the GUI.Forms 0.5 migration). Exact filename without forced extension. | Durable last-folder state and platform scope. |
+| Lifecycle | One main document with owned reusable find/font windows; the host file dialogs are modal. New/Open/Close ask Save/Discard/Cancel; failed/cancelled Save As cancels the pending operation. | Multiwindow launch and duplicate-open policy. |
 
 The editor does not register handlers, change OS defaults, create a settings
 database, or claim Orchestrator help/settings availability. Help is local text.

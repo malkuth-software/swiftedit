@@ -174,8 +174,6 @@ def main() -> None:
     notices: Path = resources / 'licenses'
     runtime: Path = Path(os.environ['GUI_FORMS_LLVM_RUNTIME']).resolve()
     shutil.copytree(sdk / 'gui-forms-sdk/share/licenses', notices, dirs_exist_ok=True)
-    shutil.copytree(sdk / 'picker-sdk/share/licenses', notices, dirs_exist_ok=True)
-    shutil.copytree(sdk / 'stx-rtf2md-sdk/share/licenses', notices, dirs_exist_ok=True)
     shutil.copytree(runtime / 'share/licenses', notices, dirs_exist_ok=True)
     shutil.copy2('third_party/md4c/LICENSE.md', notices / 'MD4C.md')
     shutil.copy2('third_party/unicode/LICENSE.txt', notices / 'Unicode.txt')
@@ -189,9 +187,13 @@ def main() -> None:
     verify_load_paths(executable, executable, app)
     verify_load_paths(terminal, terminal, app)
     verify_load_paths(cli, cli, app)
+    # One module: GUI.Forms is linked into the executables, so Frameworks
+    # holds only what fixup_bundle found (a shared libc++ runtime, when the
+    # runtime tree has no archives), and may be absent.
     frameworks: Path = app / 'Contents/Frameworks'
+    libraries: list[Path] = sorted(frameworks.iterdir()) if frameworks.is_dir() else []
     library: Path
-    for library in frameworks.iterdir():
+    for library in libraries:
         if library.is_file() and not library.is_symlink():
             verify_load_paths(library, executable, app)
             run(['codesign', '--force', '--sign', '-', str(library)])
@@ -228,7 +230,7 @@ def main() -> None:
     (output / 'README.txt').write_text(
         'SwiftEdit development build for Apple silicon\n\n'
         'Extract the ZIP, then open SwiftEdit.app. The app includes its required private '
-        'libraries, fonts and license notices. This build is ad-hoc signed, not notarized.\n'
+        'libraries and license notices. This build is ad-hoc signed, not notarized.\n'
         'Built and tested on Apple-silicon macOS 15 with the GUI.Forms macOS 14 runtime contract. Intel Macs are not supported.\n\n'
         'Interactive terminal: run ./SwiftEdit.app/Contents/MacOS/SwiftEdit-terminal [file] '
         'from Terminal. Use --help for shortcuts. The terminal clipboard is private; '
