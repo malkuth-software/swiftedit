@@ -242,9 +242,16 @@ def linux(bundle: Path, output: Path, scratch: Path, platform: str) -> tuple[Pat
         'Maintainer: ' + DEBIAN_MAINTAINER + '\n\n'
         'Package: ' + DEBIAN_PACKAGE + '\nArchitecture: ' + architecture + '\nDescription: SwiftEdit native text editor\n',
         encoding='utf-8')
-    arguments: list[str] = ['dpkg-shlibdeps', '-O', '-l' + str(installed / 'lib'), '--ignore-missing-info']
+    # The bundle holds the programs alone since the C++ runtime is static (no lib/);
+    # a lib/ beside them is still searched and scanned when one is shipped.
+    libraries: Path = installed / 'lib'
+    arguments: list[str] = ['dpkg-shlibdeps', '-O', '--ignore-missing-info']
+    binaries: list[Path] = list((installed / 'bin').iterdir())
+    if libraries.is_dir():
+        arguments.insert(2, '-l' + str(libraries))
+        binaries.extend(libraries.iterdir())
     binary: Path
-    for binary in list((installed / 'bin').iterdir()) + list((installed / 'lib').iterdir()):
+    for binary in binaries:
         arguments.append('-e' + str(binary))
     listing: str = run(arguments, scratch)
     dependencies: str = ''

@@ -1,5 +1,11 @@
 cmake_minimum_required(VERSION 3.25)
 project(SwiftEdit VERSION 0.4.0 LANGUAGES C CXX)
+# Every shipped program imports only system DLLs (tools/Package-Desktop.py): link
+# libc++, libunwind, compiler-rt and winpthreads statically, as GUI.Forms does for
+# its own programs (gui_forms/CMakeLists.txt, add_link_options(-static) under MINGW).
+if(MINGW)
+  add_link_options(-static)
+endif()
 set(SWIFTEDIT_RELEASE_VERSION "${PROJECT_VERSION}" CACHE STRING "Tested publication version")
 if(NOT SWIFTEDIT_RELEASE_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
   message(FATAL_ERROR "SWIFTEDIT_RELEASE_VERSION must be numeric major.minor.patch")
